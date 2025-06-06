@@ -18,6 +18,7 @@ interface BentoCardProps {
   onClick?: () => void;
   loading?: boolean;
   children?: React.ReactNode;
+  className?: string;
 }
 
 const BentoCard: React.FC<BentoCardProps> = ({

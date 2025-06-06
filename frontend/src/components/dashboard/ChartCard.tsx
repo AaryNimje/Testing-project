@@ -4,11 +4,12 @@ import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import { TrendingUp, TrendingDown, Download, Maximize2, MoreVertical } from 'lucide-react';
 
 interface ChartCardProps {
   title: string;
   subtitle?: string;
-  data: any[];
+  data: Record<string, any>[];
   chartType: 'line' | 'area' | 'bar' | 'pie';
   dataKey: string;
   xAxisKey?: string;
@@ -42,7 +43,7 @@ const ChartCard: React.FC<ChartCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const sizeClasses = {
+  const sizeClasses: { [key in 'small' | 'medium' | 'large']: string } = {
     small: 'col-span-1 row-span-1 min-h-[200px]',
     medium: 'col-span-1 row-span-1 min-h-[300px] md:col-span-2',
     large: 'col-span-1 row-span-2 min-h-[400px] md:col-span-2 lg:col-span-3'
@@ -87,27 +88,33 @@ const ChartCard: React.FC<ChartCardProps> = ({
   };
 
   // Custom tooltip component
-  const CustomTooltip = ({ active, payload, label }: {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-}) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-        <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-          {label}
-        </p>
-        {payload.map((entry: any, index: number) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
-            {`${entry.name}: ${entry.value}`}
-          </p>
-        ))}
-      </div>
-    );
+  interface CustomTooltipProps {
+    active?: boolean;
+    payload?: {
+      name: string;
+      value: number;
+      color: string;
+    }[];
+    label?: string;
   }
-  return null;
-};
+
+  const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+            {label}
+          </p>
+          {payload.map((entry, index) => (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {`${entry.name}: ${entry.value}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Render different chart types
   const renderChart = () => {
@@ -221,10 +228,10 @@ const ChartCard: React.FC<ChartCardProps> = ({
               outerRadius={80}
               fill="#8884d8"
               dataKey={dataKey}
-              label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              label={({ name, percent }: { name: string; percent?: number }) => (percent ? `${name} ${(percent * 100).toFixed(0)}%` : name)}
               animationDuration={1000}
             >
-              {data.map((entry, index) => (
+              {data.map((entry: Record<string, any>, index: number) => (
                 <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
               ))}
             </Pie>
@@ -233,7 +240,7 @@ const ChartCard: React.FC<ChartCardProps> = ({
         );
 
       default:
-        return null;
+        return <></>;
     }
   };
 

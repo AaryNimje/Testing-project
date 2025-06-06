@@ -1,9 +1,9 @@
 'use client';
 import React from 'react';
 import { BentoGrid } from '@/components/dashboard/BentoGrid';
-import { BentoCard } from '@/components/dashboard/BentoCard';
-import { ChartCard } from '@/components/dashboard/ChartCard';
-import { TableCard } from '@/components/dashboard/TableCard';
+import BentoCard from '@/components/dashboard/BentoCard';
+import ChartCard from '@/components/dashboard/ChartCard';
+import TableCard from '@/components/dashboard/TableCard';
 import { Users, BookOpen, GraduationCap, TrendingUp, Award, Calendar, BarChart3, UserCheck } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -111,19 +111,14 @@ export default function AdminDashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {institutionMetrics.map((metric, index) => (
-          <BentoCard key={index} className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-pink-500/20">
-                <metric.icon className="w-5 h-5 text-purple-400" />
-              </div>
-              <div className={`w-2 h-2 rounded-full ${
-                metric.trend === 'up' ? 'bg-green-400' : 'bg-blue-400'
-              }`} />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-1">{metric.value}</h3>
-            <p className="text-sm font-medium text-gray-300">{metric.title}</p>
-            <p className="text-xs text-gray-500 mt-2">{metric.change}</p>
-          </BentoCard>
+          <BentoCard
+            key={index}
+            title={metric.title}
+            value={metric.value}
+            icon={metric.icon}
+            subtitle={metric.change}
+            className="p-4"
+          />
         ))}
       </div>
 
@@ -132,15 +127,25 @@ export default function AdminDashboard() {
         <ChartCard
           title="Enrollment Analytics"
           subtitle="Student enrollment trends over time"
-          type="line"
-          data={enrollmentData}
+          chartType="line"
+          data={enrollmentData.labels.map((label, i) => ({
+            name: label,
+            total: enrollmentData.datasets[0].data[i],
+            new: enrollmentData.datasets[1].data[i],
+          }))}
+          dataKey="total"
+          xAxisKey="name"
         />
 
         <ChartCard
           title="Department Distribution"
           subtitle="Students by department"
-          type="doughnut"
-          data={departmentData}
+          chartType="pie"
+          data={departmentData.labels.map((label, i) => ({
+            name: label,
+            value: departmentData.datasets[0].data[i],
+          }))}
+          dataKey="value"
         />
       </BentoGrid>
 
@@ -149,30 +154,17 @@ export default function AdminDashboard() {
         <TableCard
           title="Faculty Workload"
           subtitle="Current teaching assignments"
-          headers={['Faculty', 'Courses', 'Students', 'Workload']}
-          data={facultyWorkload.map(faculty => [
-            <div key={faculty.name}>
-              <p className="font-medium text-white">{faculty.name}</p>
-              <p className="text-xs text-gray-400">{faculty.department}</p>
-            </div>,
-            faculty.courses.toString(),
-            faculty.students.toString(),
-            <span key={faculty.name} className={`px-2 py-1 rounded-full text-xs ${
-              parseInt(faculty.workload) > 90 ? 'bg-red-500/20 text-red-400' :
-              parseInt(faculty.workload) > 80 ? 'bg-yellow-500/20 text-yellow-400' :
-              'bg-green-500/20 text-green-400'
-            }`}>
-              {faculty.workload}
-            </span>
-          ])}
+          columns={[
+            { key: 'name', label: 'Faculty' },
+            { key: 'courses', label: 'Courses' },
+            { key: 'students', label: 'Students' },
+            { key: 'workload', label: 'Workload' },
+          ]}
+          data={facultyWorkload}
           className="lg:col-span-2"
         />
 
-        <BentoCard className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Calendar className="w-5 h-5 text-purple-400" />
-            <h3 className="text-lg font-semibold text-white">Upcoming Events</h3>
-          </div>
+        <BentoCard title="Upcoming Events" value="" icon={Calendar} className="p-6">
           <div className="space-y-4">
             {upcomingEvents.map((event, index) => (
               <div key={index} className="border-l-2 border-purple-500/30 pl-4">
@@ -189,19 +181,13 @@ export default function AdminDashboard() {
       <TableCard
         title="Recent Activities"
         subtitle="Latest institutional activities and updates"
-        headers={['Activity', 'Department', 'Time', 'Priority']}
-        data={recentActivities.map(activity => [
-          activity.activity,
-          activity.department,
-          activity.time,
-          <span key={activity.activity} className={`px-2 py-1 rounded-full text-xs ${
-            activity.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-            activity.priority === 'normal' ? 'bg-blue-500/20 text-blue-400' :
-            'bg-green-500/20 text-green-400'
-          }`}>
-            {activity.priority}
-          </span>
-        ])}
+        columns={[
+          { key: 'activity', label: 'Activity' },
+          { key: 'department', label: 'Department' },
+          { key: 'time', label: 'Time' },
+          { key: 'priority', label: 'Priority' },
+        ]}
+        data={recentActivities}
       />
 
       {/* Quick Actions */}
@@ -212,16 +198,14 @@ export default function AdminDashboard() {
           { title: 'Reports', description: 'Generate institutional reports', color: 'blue' },
           { title: 'Settings', description: 'System configuration', color: 'green' }
         ].map((action, index) => (
-          <BentoCard key={index} className="p-4 cursor-pointer hover:scale-105 transition-transform">
-            <div className={`w-full h-2 bg-gradient-to-r ${
-              action.color === 'purple' ? 'from-purple-500 to-purple-600' :
-              action.color === 'pink' ? 'from-pink-500 to-pink-600' :
-              action.color === 'blue' ? 'from-blue-500 to-blue-600' :
-              'from-green-500 to-green-600'
-            } rounded-full mb-4`} />
-            <h4 className="font-semibold text-white mb-2">{action.title}</h4>
-            <p className="text-sm text-gray-400">{action.description}</p>
-          </BentoCard>
+          <BentoCard
+            key={index}
+            title={action.title}
+            value=""
+            icon={BarChart3}
+            subtitle={action.description}
+            className="p-4 cursor-pointer hover:scale-105 transition-transform"
+          />
         ))}
       </div>
     </div>

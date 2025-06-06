@@ -10,14 +10,14 @@ interface Column {
   label: string;
   sortable?: boolean;
   width?: string;
-  render?: (value: any, row: any) => React.ReactNode;
+  render?: (value: any, row: Record<string, any>) => React.ReactNode;
 }
 
 interface TableCardProps {
   title: string;
   subtitle?: string;
   columns: Column[];
-  data: any[];
+  data: Record<string, any>[];
   size?: 'small' | 'medium' | 'large';
   loading?: boolean;
   searchable?: boolean;
@@ -28,11 +28,11 @@ interface TableCardProps {
   actions?: {
     label: string;
     icon: React.ReactNode;
-    onClick: (row: any) => void;
+    onClick: (row: Record<string, any>) => void;
     color?: string;
-    disabled?: (row: any) => boolean;
+    disabled?: (row: Record<string, any>) => boolean;
   }[];
-  onRowClick?: (row: any) => void;
+  onRowClick?: (row: Record<string, any>) => void;
   className?: string;
   selectable?: boolean;
 }
@@ -73,7 +73,7 @@ const TableCard: React.FC<TableCardProps> = ({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
 
-  const sizeClasses = {
+  const sizeClasses: { [key in 'small' | 'medium' | 'large']: string } = {
     small: 'col-span-1 row-span-1 min-h-[300px]',
     medium: 'col-span-1 row-span-2 min-h-[400px] md:col-span-2',
     large: 'col-span-1 row-span-2 min-h-[500px] md:col-span-3 lg:col-span-4'
@@ -185,7 +185,7 @@ const TableCard: React.FC<TableCardProps> = ({
     if (selectedRows.size === paginatedData.length) {
       setSelectedRows(new Set());
     } else {
-      setSelectedRows(new Set(paginatedData.map((_, index) => index.toString())));
+      setSelectedRows(new Set(paginatedData.map((row: Record<string, any>, index) => row.id ? row.id.toString() : index.toString())));
     }
   };
 
@@ -196,13 +196,13 @@ const TableCard: React.FC<TableCardProps> = ({
     ...sortedData.map(row => 
       columns.map(col => row[col.key] || '').join(',')
     )
-  ].join('\n'); // Changed from \\n to \n
+  ].join('\n');
   
   const blob = new Blob([csvContent], { type: 'text/csv' });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${title.toLowerCase().replace(/\s+/g, '_')}.csv`; // Changed from \\s+ to \s+
+  a.download = `${title.toLowerCase().replace(/\s+/g, '_')}.csv`;
   a.click();
   window.URL.revokeObjectURL(url);
 };
@@ -322,7 +322,7 @@ const TableCard: React.FC<TableCardProps> = ({
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                 <AnimatePresence>
-                  {paginatedData.map((row, index) => (
+                  {paginatedData.map((row: Record<string, any>, index: number) => (
                     <motion.tr
                       key={index}
                       custom={index}
@@ -432,95 +432,4 @@ const TableCard: React.FC<TableCardProps> = ({
   );
 };
 
-// Example usage component for demonstration
-const TableCardExample = () => {
-  const sampleData = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Faculty', status: 'Active', lastLogin: '2024-01-15' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'Student', status: 'Active', lastLogin: '2024-01-14' },
-    { id: 3, name: 'Bob Johnson', email: 'bob@example.com', role: 'Admin', status: 'Inactive', lastLogin: '2024-01-10' },
-    { id: 4, name: 'Alice Wilson', email: 'alice@example.com', role: 'Faculty', status: 'Active', lastLogin: '2024-01-15' },
-    { id: 5, name: 'Charlie Brown', email: 'charlie@example.com', role: 'Student', status: 'Active', lastLogin: '2024-01-13' },
-  ];
-
-  const columns = [
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'email', label: 'Email', sortable: true },
-    { 
-      key: 'role', 
-      label: 'Role', 
-      sortable: true,
-      render: (value: string) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          value === 'Admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-          value === 'Faculty' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-        }`}>
-          {value}
-        </span>
-      )
-    },
-    { 
-      key: 'status', 
-      label: 'Status', 
-      sortable: true,
-      render: (value: string) => (
-        <span className={`flex items-center ${
-          value === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-        }`}>
-          <div className={`w-2 h-2 rounded-full mr-2 ${
-            value === 'Active' ? 'bg-green-500' : 'bg-red-500'
-          }`}></div>
-          {value}
-        </span>
-      )
-    },
-    { key: 'lastLogin', label: 'Last Login', sortable: true },
-  ];
-
-  const actions = [
-    {
-      label: 'View',
-      icon: <Eye className="h-4 w-4" />,
-      onClick: (row: any) => console.log('View', row),
-      color: 'text-blue-600 dark:text-blue-400'
-    },
-    {
-      label: 'Edit',
-      icon: <Edit className="h-4 w-4" />,
-      onClick: (row: any) => console.log('Edit', row),
-      color: 'text-green-600 dark:text-green-400'
-    },
-    {
-      label: 'Delete',
-      icon: <Trash2 className="h-4 w-4" />,
-      onClick: (row: any) => console.log('Delete', row),
-      color: 'text-red-600 dark:text-red-400',
-      disabled: (row: any) => row.role === 'Admin'
-    }
-  ];
-
-  return (
-    <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <TableCard
-          title="User Management"
-          subtitle="Manage system users and their roles"
-          columns={columns}
-          data={sampleData}
-          size="large"
-          searchable={true}
-          filterable={true}
-          exportable={true}
-          pagination={true}
-          pageSize={3}
-          actions={actions}
-          selectable={true}
-          onRowClick={(row) => console.log('Row clicked:', row)}
-        />
-      </div>
-    </div>
-  );
-};
-
 export default TableCard;
-export { TableCardExample };
