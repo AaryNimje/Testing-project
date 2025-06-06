@@ -1,10 +1,10 @@
 'use client';
 
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { BentoGrid } from '@/components/dashboard/BentoGrid';
-import { BentoCard } from '@/components/dashboard/BentoCard';
-import { ChartCard } from '@/components/dashboard/ChartCard';
-import { TableCard } from '@/components/dashboard/TableCard';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import BentoGrid from '@/components/dashboard/BentoGrid';
+import BentoCard from '@/components/dashboard/BentoCard';
+import ChartCard from '@/components/dashboard/ChartCard';
+import TableCard from '@/components/dashboard/TableCard';
 import { 
   BookOpen, 
   Calendar, 

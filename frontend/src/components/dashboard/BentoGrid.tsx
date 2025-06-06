@@ -1,21 +1,16 @@
+// components/dashboard/BentoGrid.tsx
 'use client';
 
 import React, { ReactNode } from 'react';
-import { cn } from '@/lib/utils';
 
-interface BentoGridProps {
+export interface BentoGridProps {
   children: ReactNode;
   className?: string;
 }
 
-export function BentoGrid({ children, className = '' }: BentoGridProps) {
+export default function BentoGrid({ children, className = '' }: BentoGridProps) {
   return (
-    <div
-      className={cn(
-        'grid w-full auto-rows-[22rem] grid-cols-3 gap-4',
-        className,
-      )}
-    >
+    <div className={`grid ${className}`}>
       {children}
     </div>
   );

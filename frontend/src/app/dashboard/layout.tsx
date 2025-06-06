@@ -1,21 +1,49 @@
 'use client';
-import React from 'react';
-import { Sidebar } from '@/components/dashboard/Sidebar';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import React, { useState } from 'react';
+import Sidebar from '@/components/dashboard/Sidebar';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import { THEME } from '@/lib/constants';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Mock user data for demonstration
+  const userData = {
+    fullName: 'John Doe',
+    role: 'admin',
+    id: '1',
+    email: 'john@example.com'
+  };
+  
+  // Mock menu items
+  const menuItems = [
+    { name: 'Dashboard', path: '/dashboard', icon: () => <span>📊</span> },
+    { name: 'Users', path: '/dashboard/users', icon: () => <span>👥</span> },
+    { name: 'Settings', path: '/dashboard/settings', icon: () => <span>⚙️</span> }
+  ];
+
   return (
     <div className="min-h-screen bg-black flex">
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar 
+        isOpen={sidebarOpen}
+        toggleSidebarAction={() => setSidebarOpen(!sidebarOpen)}
+        menuItems={menuItems}
+        user={userData}
+        onLogoutAction={() => console.log('Logout clicked')}
+      />
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <DashboardHeader />
+        <DashboardHeader 
+          title="Dashboard"
+          toggleSidebarAction={() => setSidebarOpen(!sidebarOpen)}
+          user={userData}
+        />
         
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-6">

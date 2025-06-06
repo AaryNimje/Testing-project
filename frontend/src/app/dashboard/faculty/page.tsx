@@ -1,9 +1,10 @@
+// app/dashboard/faculty/page.tsx
 'use client';
 import React, { useState } from 'react';
-import { BentoGrid } from '@/components/dashboard/BentoGrid';
-import { BentoCard } from '@/components/dashboard/BentoCard';
-import { ChartCard } from '@/components/dashboard/ChartCard';
-import { TableCard } from '@/components/dashboard/TableCard';
+import BentoGrid from '@/components/dashboard/BentoGrid';
+import BentoCard from '@/components/dashboard/BentoCard';
+import ChartCard from '@/components/dashboard/ChartCard';
+import TableCard from '@/components/dashboard/TableCard';
 import { 
   BookOpenIcon, 
   ClipboardDocumentListIcon, 
@@ -79,55 +80,47 @@ export default function FacultyDashboard() {
     <div className="space-y-6">
       {/* Today's Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <BentoCard className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600 font-medium">TODAY'S CLASSES</p>
-              <p className="text-2xl font-bold text-blue-900">{todayOverview.classes}</p>
-              <p className="text-xs text-blue-700">Next: {todayOverview.nextClass}</p>
-            </div>
-            <CalendarDaysIcon className="h-8 w-8 text-blue-500" />
-          </div>
+        <BentoCard 
+          title="Today's Classes" 
+          subtitle={`Next: ${todayOverview.nextClass}`}
+          className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200"
+          icon={<CalendarDaysIcon className="h-8 w-8 text-blue-500" />}
+        >
+          <div className="text-2xl font-bold text-blue-900">{todayOverview.classes}</div>
         </BentoCard>
 
-        <BentoCard className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-orange-600 font-medium">ASSIGNMENTS TO GRADE</p>
-              <p className="text-2xl font-bold text-orange-900">{todayOverview.assignments}</p>
-              <p className="text-xs text-orange-700">Due: {todayOverview.assignmentsDue}</p>
-            </div>
-            <ClipboardDocumentListIcon className="h-8 w-8 text-orange-500" />
-          </div>
+        <BentoCard 
+          title="Assignments" 
+          subtitle={`Due: ${todayOverview.assignmentsDue}`}
+          className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200"
+          icon={<ClipboardDocumentListIcon className="h-8 w-8 text-orange-500" />}
+        >
+          <div className="text-2xl font-bold text-orange-900">{todayOverview.assignments}</div>
         </BentoCard>
 
-        <BentoCard className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 font-medium">STUDENTS PRESENT</p>
-              <p className="text-2xl font-bold text-green-900">{todayOverview.studentsPresent}</p>
-              <p className="text-xs text-green-700">{todayOverview.attendanceRate}</p>
-            </div>
-            <UserGroupIcon className="h-8 w-8 text-green-500" />
-          </div>
+        <BentoCard 
+          title="Attendance" 
+          subtitle={todayOverview.attendanceRate}
+          className="bg-gradient-to-br from-green-50 to-green-100 border-green-200"
+          icon={<UserGroupIcon className="h-8 w-8 text-green-500" />}
+        >
+          <div className="text-2xl font-bold text-green-900">{todayOverview.studentsPresent}</div>
         </BentoCard>
 
-        <BentoCard className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-600 font-medium">AI TOOLS USED TODAY</p>
-              <p className="text-2xl font-bold text-purple-900">{todayOverview.aiToolsUsed}</p>
-              <p className="text-xs text-purple-700">Cost: {todayOverview.costToday}</p>
-            </div>
-            <SparklesIcon className="h-8 w-8 text-purple-500" />
-          </div>
+        <BentoCard 
+          title="AI Tools" 
+          subtitle={`Cost: ${todayOverview.costToday}`}
+          className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200"
+          icon={<SparklesIcon className="h-8 w-8 text-purple-500" />}
+        >
+          <div className="text-2xl font-bold text-purple-900">{todayOverview.aiToolsUsed}</div>
         </BentoCard>
       </div>
 
       {/* Main Dashboard Grid */}
       <BentoGrid className="grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Class Performance Dashboard */}
-        <ChartCard 
+        <BentoCard 
           title="Class Performance Overview" 
           className="lg:col-span-2"
           icon={<ChartBarIcon className="h-5 w-5" />}
@@ -169,15 +162,15 @@ export default function FacultyDashboard() {
               </div>
             </div>
           </div>
-        </ChartCard>
+        </BentoCard>
 
         {/* AI Tools Sidebar */}
-        <BentoCard className="bg-gradient-to-b from-indigo-50 to-indigo-100 border-indigo-200">
+        <BentoCard 
+          title="AI Teaching Tools"
+          className="bg-gradient-to-b from-indigo-50 to-indigo-100 border-indigo-200"
+          icon={<SparklesIcon className="h-5 w-5 text-indigo-600" />}
+        >
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-indigo-900">AI Teaching Tools</h3>
-              <SparklesIcon className="h-5 w-5 text-indigo-600" />
-            </div>
             <div className="space-y-2">
               {aiTools.slice(0, 6).map((tool) => (
                 <button
@@ -205,7 +198,7 @@ export default function FacultyDashboard() {
         </BentoCard>
 
         {/* Student Engagement Metrics */}
-        <ChartCard 
+        <BentoCard 
           title="Student Engagement Analytics"
           icon={<PresentationChartLineIcon className="h-5 w-5" />}
         >
@@ -246,7 +239,7 @@ export default function FacultyDashboard() {
               </div>
             </div>
           </div>
-        </ChartCard>
+        </BentoCard>
 
         {/* Assignment & Grading Center */}
         <TableCard 
@@ -304,13 +297,13 @@ export default function FacultyDashboard() {
       </BentoGrid>
 
       {/* Communication Hub Bottom Panel */}
-      <BentoCard className="bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200">
+      <BentoCard 
+        title="Communication Hub"
+        className="bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200"
+        icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />}
+      >
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900 flex items-center space-x-2">
-              <ChatBubbleLeftRightIcon className="h-5 w-5" />
-              <span>Communication Hub</span>
-            </h3>
             <div className="flex space-x-2">
               <button className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
                 New Message

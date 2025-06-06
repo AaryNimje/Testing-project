@@ -34,8 +34,8 @@ export default function AuthPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userRole', data.user.role);
+      document.cookie = `token=${data.token}; path=/; secure; samesite=strict`;
+      document.cookie = `userRole=${data.user.role}; path=/; secure; samesite=strict`;
 
       // Role-based redirection
       switch (data.user.role) {

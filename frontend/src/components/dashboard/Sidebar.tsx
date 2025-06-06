@@ -1,16 +1,27 @@
+// components/dashboard/Sidebar.tsx
 'use client';
 
-import React from 'react';
+import React, { ReactElement } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { X, ChevronRight, LogOut, GraduationCap } from 'lucide-react';
-import { DashboardMenuItem, User, THEME } from '@/lib/constants';
+import { THEME } from '@/lib/constants';
 
-interface SidebarProps {
+export interface SidebarProps {
   isOpen: boolean;
   toggleSidebarAction: () => void;
-  menuItems: DashboardMenuItem[];
-  user: User;
+  menuItems: {
+    name: string;
+    path?: string;
+    icon: React.ComponentType<any> | (() => ReactElement);
+    badge?: string;
+  }[];
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    role: string;
+  };
   onLogoutAction: () => void;
 }
 
@@ -60,7 +71,7 @@ export default function Sidebar({
                     background: `linear-gradient(to right, ${THEME.colors.primary.from}, ${THEME.colors.primary.to})`,
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
-                  }}
+                  } as React.CSSProperties}
                 >
                   Academic AI
                 </span>
@@ -89,7 +100,7 @@ export default function Sidebar({
           <nav className="flex-1 space-y-1">
             {menuItems.map((item, index) => {
               const isActive = pathname === item.path;
-              const IconComponent = item.icon as React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+              const IconComponent = item.icon;
               
               return (
                 <Link
@@ -102,23 +113,10 @@ export default function Sidebar({
                     backgroundColor: isActive ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
                     borderColor: isActive ? THEME.colors.primary.from : 'transparent',
                   }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }
-                  }}
                 >
-                  <IconComponent 
-                    className={`w-5 h-5`}
-                    style={{ 
-                      color: isActive ? THEME.colors.accent : THEME.colors.text.secondary 
-                    }}
-                  />
+                  <span className="w-5 h-5" style={{ color: isActive ? THEME.colors.accent : THEME.colors.text.secondary }}>
+                    {React.createElement(IconComponent)}
+                  </span>
                   <span 
                     className={isActive ? 'text-white' : ''}
                     style={{ color: isActive ? '#FFFFFF' : THEME.colors.text.secondary }}
