@@ -6,28 +6,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from 'next/link';
-import { LampContainer } from "@/components/aceternity/lamp-effect";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); // Clear previous errors
-    setSuccess(''); // Clear previous success messages
+    setError('');
+    setSuccess('');
+    setLoading(true);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    // Validation
+    if (!email || !password || !firstName || !lastName) {
+      setError("All fields are required.");
+      setLoading(false);
       return;
     }
 
-    if (!email || !password) {
-      setError("Email and password are required.");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      setLoading(false);
       return;
     }
 
@@ -37,7 +49,12 @@ export default function SignUpPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          firstName, 
+          lastName 
+        }),
       });
 
       if (!response.ok) {
@@ -46,89 +63,172 @@ export default function SignUpPage() {
       }
 
       const data = await response.json();
-      setSuccess(data.message || 'Sign up successful! Redirecting to sign in...');
-      router.push('/auth'); // Redirect to the sign-in page at /auth
+      console.log('Signed up user:', data.user); // Example use
+
+      setSuccess('Account created successfully! Redirecting to sign in...');
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.push('/auth');
+      }, 2000);
 
     } catch (err: unknown) {
-       if (err instanceof Error) {
+      if (err instanceof Error) {
         setError(err.message);
-        console.error('Sign up error:', err);
       } else {
         setError('An unknown error occurred during sign up.');
-        console.error('An unknown error occurred during sign up:', err);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    // Main container with deep blue gradient and relative positioning for absolute children
-    <div className="min-h-screen max-h-screen overflow-hidden relative bg-gradient-to-b from-blue-900 to-black">
-      {/* LampContainer for the upper lamp effect area */}
-      <LampContainer>
-         {/* Optional: Add a title or subtitle inside the lamp area */}
-         <div className="text-center space-y-4 mt-20"> {/* Added margin top to push content down slightly */}
-            <h1 className="text-4xl md:text-6xl font-black text-white leading-tight">
-              <span
-                className="drop-shadow-2xl text-white filter contrast-150 brightness-110"
-                style={{ fontFamily: 'Playfair Display, Georgia, serif' }}
-              >
-              </span>
-            </h1>
-            <p className="text-lg text-gray-200 max-w-3xl mx-auto font-light leading-relaxed">
-              Create your account
-            </p>
-          </div>
-      </LampContainer>
+    <div className="min-h-screen bg-gradient-to-b from-blue-900 to-black">
+      {/* Full screen container with proper flexbox centering */}
+      <div className="min-h-screen flex items-center justify-center p-4">
+        {/* Centered form container */}
+        <div className="w-full max-w-md">
+          {/* Form card with enhanced styling */}
+          <div className="p-8 space-y-6 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/20">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
+              <p className="text-gray-600">Join our academic platform today</p>
+            </div>
 
-      {/* Sign-up form block - positioned absolutely below the lamp area */}
-      {/* Adjusted bottom value and added flex justify-center for horizontal centering */}
-      <div className="absolute bottom-10 left-0 w-full flex justify-center z-20"> {/* Positioned absolutely, centered horizontally */}
-        <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-center text-gray-900">Sign Up</h2>
-          <form className="space-y-4" onSubmit={handleSignUp}>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            {/* Form */}
+            <form className="space-y-5" onSubmit={handleSignUp}>
+              {/* Name fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName" className="text-gray-700 font-medium">
+                    First Name
+                  </Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="John"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName" className="text-gray-700 font-medium">
+                    Last Name
+                  </Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Doe"
+                  />
+                </div>
+              </div>
+
+              {/* Email field */}
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-700 font-medium">
+                  Email Address
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="john.doe@example.com"
+                />
+              </div>
+
+              {/* Password field */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700 font-medium">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="At least 6 characters"
+                />
+              </div>
+
+              {/* Confirm password field */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Repeat your password"
+                />
+              </div>
+
+              {/* Error message */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">{error}</p>
+                </div>
+              )}
+
+              {/* Success message */}
+              {success && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-green-600 text-sm">{success}</p>
+                </div>
+              )}
+
+              {/* Submit button */}
+              <Button 
+                type="submit" 
+                className="w-full h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                disabled={loading}
+              >
+                {loading ? 'Creating Account...' : 'Create Account'}
+              </Button>
+            </form>
+
+            {/* Footer */}
+            <div className="text-center pt-4 border-t border-gray-200">
+              <p className="text-gray-600">
+                Already have an account?{' '}
+                <Link 
+                  href="/auth" 
+                  className="font-semibold text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                >
+                  Sign in here
+                </Link>
+              </p>
+              <Link 
+                href="/" 
+                className="inline-block mt-3 text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+              >
+                ← Back to home
+              </Link>
             </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-             <div>
-              <Label htmlFor="confirm-password">Confirm Password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            {success && <p className="text-green-500 text-sm">{success}</p>}
-            <Button type="submit" className="w-full">
-              Sign Up
-            </Button>
-          </form>
-          <div className="text-center text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link href="/auth" className="font-medium text-blue-600 hover:underline">
-              Sign In
-            </Link>
           </div>
         </div>
+      </div>
+
+      {/* Background decoration */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-green-400/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl"></div>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import Link from "next/link";
 export default function LandingPage() {
   return (
     // Main container for the single-screen layout and deep blue background
-    <div className="min-h-screen max-h-screen overflow-hidden relative bg-gradient-to-b from-blue-900 to-black"> {/* Added classes for single screen and deep blue gradient */}
+    <div className="min-h-screen max-h-screen overflow-hidden relative bg-gradient-to-b from-blue-900 to-black">
       {/* Navigation */}
       <nav className="absolute top-0 right-0 z-50 p-6">
         <div className="flex space-x-4">
@@ -18,7 +18,8 @@ export default function LandingPage() {
               Sign Up
             </Button>
           </Link>
-          <Link href="/auth/signin">
+          {/* Fixed: Changed from /auth/signin to /auth */}
+          <Link href="/auth">
             <Button
               variant="outline"
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm font-medium"
@@ -38,10 +39,9 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section with Enhanced Lamp Effect */}
-      {/* LampContainer provides the visual effect for the upper part */}
       <LampContainer>
         <div className="text-center space-y-8">
-          {/* Main Title - Enhanced with different font and more bold */}
+          {/* Main Title */}
           <h1 className="text-6xl md:text-8xl font-black text-white mb-8 leading-tight">
             <span
               className="drop-shadow-2xl text-white filter contrast-150 brightness-110"
@@ -61,7 +61,8 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center mt-12">
-            <Link href="/auth/signin">
+            {/* Fixed: Changed from /auth/signin to /auth */}
+            <Link href="/auth">
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold px-8 py-4 text-lg shadow-2xl transform hover:scale-105 transition-all duration-300"
@@ -81,44 +82,10 @@ export default function LandingPage() {
         </div>
       </LampContainer>
 
-      {/* Moving Cards Section - Positioned absolutely at the bottom */}
-      {/* Added absolute positioning and bottom padding */}
+      {/* Moving Cards Section */}
       <div className="absolute bottom-8 left-0 w-full z-20">
          <MovingCards />
       </div>
-
-
-      {/* Additional Info Section - Removed */}
-      {/* <section className="py-20 px-4 bg-gradient-to-b from-white to-gray-50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 font-serif">
-            Why Choose Our Platform?
-          </h2>
-          <div className="grid grid-cols-1 md::grid-cols-3 gap-8 mt-12">
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto">
-                <span className="text-2xl">⚡</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 font-sans">Lightning Fast</h3>
-              <p className="text-gray-600 font-light">Get results in seconds, not hours. Our AI processes requests instantly.</p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto">
-                <span className="text-2xl">🎯</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 font-sans">Precision Focused</h3>
-              <p className="text-gray-600 font-light">Tailored specifically for academic environments and educational workflows.</p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto">
-                <span className="text-2xl">🔒</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 font-sans">Secure & Private</h3>
-              <p className="text-gray-600 font-light">Enterprise-grade security with complete data privacy and FERPA compliance.</p>
-            </div>
-          </div>
-        </div>
-      </section> */}
     </div>
   );
 }

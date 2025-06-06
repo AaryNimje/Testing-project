@@ -1,0 +1,72 @@
+- .env.example
+- .gitignore
+- backend
+  - app.py
+  - apply_schema.py
+  - create_schema_file.py
+  - full_schema.sql
+  - models.py
+  - requirements.txt
+  - reset_database.py
+  - test_connection.py
+  - test_full_schema.py
+- docs
+- frontend
+  - .gitignore
+  - components.json
+  - eslint.config.mjs
+  - next-env.d.ts
+  - next.config.ts
+  - package-lock.json
+  - package.json
+  - postcss.config.mjs
+  - public
+    - file.svg
+    - globe.svg
+    - next.svg
+    - vercel.svg
+    - window.svg
+  - README.md
+  - src
+    - app
+      - auth
+        - page.tsx
+        - signup
+          - page.tsx
+      - contact
+        - page.tsx
+      - favicon.ico
+      - globals.css
+      - layout.tsx
+      - page.tsx
+    - components
+      - aceternity
+        - lamp-effect.tsx
+        - moving-cards.tsx
+      - auth
+      - dashboard
+      - layout
+      - ui
+        - alert.tsx
+        - avatar.tsx
+        - badge.tsx
+        - button.tsx
+        - card.tsx
+        - checkbox.tsx
+        - dialog.tsx
+        - dropdown-menu.tsx
+        - form.tsx
+        - input.tsx
+        - label.tsx
+        - select.tsx
+        - separator.tsx
+        - sonner.tsx
+        - table.tsx
+        - tabs.tsx
+    - hooks
+    - lib
+      - utils.ts
+    - types
+  - tsconfig.json
+- LICENSE
+- README.md
