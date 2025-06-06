@@ -10,59 +10,61 @@ const cards = [
     title: "AI-Powered Lesson Planning",
     description: "Generate comprehensive lesson plans with learning objectives, activities, and assessments in minutes.",
     icon: "📚",
-    gradient: "from-blue-400 to-cyan-400"
+    // Removed gradient as background is handled by the main page
   },
   {
     id: 2,
     title: "Intelligent Tutoring System",
     description: "24/7 personalized tutoring that adapts to each student's learning pace and style.",
     icon: "🧠",
-    gradient: "from-purple-400 to-pink-400"
+    // Removed gradient
   },
   {
     id: 3,
     title: "Automated Assessment",
     description: "Create quizzes, grade assignments, and provide instant feedback with AI assistance.",
     icon: "✅",
-    gradient: "from-green-400 to-emerald-400"
+    // Removed gradient
   },
   {
     id: 4,
     title: "Google Workspace Integration",
     description: "Seamlessly connect with Gmail, Calendar, Drive, and Sheets for unified workflow.",
     icon: "🔗",
-    gradient: "from-orange-400 to-red-400"
+    // Removed gradient
   },
   {
     id: 5,
     title: "Real-time Analytics",
     description: "Track student progress, engagement metrics, and learning outcomes with detailed insights.",
     icon: "📊",
-    gradient: "from-indigo-400 to-blue-400"
+    // Removed gradient
   },
   {
     id: 6,
     title: "Role-Based Access",
     description: "Secure platform with customized interfaces for students, faculty, and administrators.",
     icon: "🛡️",
-    gradient: "from-teal-400 to-cyan-400"
+    // Removed gradient
   }
 ];
 
 export function MovingCards() {
   return (
-    <div className="relative overflow-hidden py-20 bg-gradient-to-b from-slate-50 to-white">
-      <div className="mb-12 text-center">
+    // Removed background gradient and padding from this container
+    <div className="relative overflow-hidden">
+      {/* Removed the title and description section */}
+      {/* <div className="mb-12 text-center">
         <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent mb-4 font-serif">
           Transforming Education Through Innovation
         </h2>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto font-light">
           Discover how our AI-powered platform revolutionizes the way we teach, learn, and manage academic institutions
         </p>
-      </div>
-      
+      </div> */}
+
       <div className="relative">
-        <motion.div 
+        <motion.div
           className="flex space-x-6"
           animate={{
             x: [0, -1920],
@@ -80,24 +82,31 @@ export function MovingCards() {
             <motion.div
               key={`${card.id}-${index}`}
               className="flex-shrink-0"
-              whileHover={{ scale: 1.05 }}
+              // Updated hover effect: removed scale, kept subtle glow
+              whileHover={{
+                 boxShadow: "0 0 25px rgba(56, 189, 248, 0.6), 0 0 50px rgba(56, 189, 248, 0.3)"
+              }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              <Card className="w-80 h-64 shadow-xl hover:shadow-2xl transition-all duration-300 border-0 overflow-hidden">
+              {/* Updated card styling: increased height (h-40) */}
+              <Card className="w-72 h-40 shadow-xl hover:shadow-2xl transition-all duration-300 border border-cyan-500/20 overflow-hidden bg-slate-800/70 backdrop-blur-sm"> {/* Changed h-32 to h-40 */}
                 <CardContent className={cn(
-                  "p-6 h-full bg-gradient-to-br",
-                  card.gradient,
-                  "text-white relative"
+                  "p-4 h-full text-white relative flex flex-col justify-between", // Adjusted padding and added flex properties
+                  // Removed card.gradient as background is now static
                 )}>
-                  <div className="absolute inset-0 bg-black/20"></div>
+                  {/* Removed the black overlay div */}
+                  {/* <div className="absolute inset-0 bg-black/20"></div> */}
                   <div className="relative z-10 h-full flex flex-col justify-between">
                     <div>
-                      <div className="text-4xl mb-4">{card.icon}</div>
-                      <h3 className="text-xl font-bold mb-3 font-sans">
+                      {/* Adjusted icon size and margin */}
+                      <div className="text-2xl mb-2">{card.icon}</div>
+                      {/* Updated title text color and font */}
+                      <h3 className="text-lg font-bold font-serif text-white"> {/* Changed text-xl to text-lg, added text-white, changed font-sans to font-serif */}
                         {card.title}
                       </h3>
                     </div>
-                    <p className="text-sm opacity-90 leading-relaxed font-light">
+                    {/* Updated description text color and font */}
+                    <p className="text-xs opacity-90 leading-relaxed font-light text-cyan-100"> {/* Changed text-sm to text-xs, added text-cyan-100 */}
                       {card.description}
                     </p>
                   </div>
