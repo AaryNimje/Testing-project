@@ -1,0 +1,24 @@
+# Core Flask Backend
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-JWT-Extended==4.5.2
+gunicorn==21.2.0
+python-dotenv==1.0.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+Flask-SQLAlchemy==3.0.5
+
+# AI & LangChain
+langchain==0.1.17
+langchain-core==0.1.52
+langchain-community==0.0.38
+google-generativeai==0.3.0
+
+# HTTP Requests
+requests==2.31.0
+
+# Utilities
+pyyaml==6.0.1
+structlog==23.1.0
