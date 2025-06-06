@@ -1,13 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*', // Proxy API requests to your backend
-      },
-    ];
-  },
+  // Removed the proxy rewrites that were causing the issue
+  // Your Next.js API routes will now work properly
 };
 
 module.exports = nextConfig;

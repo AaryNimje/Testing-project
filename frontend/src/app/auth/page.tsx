@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from 'next/link';
+import { LampContainer } from "@/components/aceternity/lamp-effect";
 
 export default function AuthPage() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,12 +20,12 @@ export default function AuthPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (!response.ok) {
@@ -34,13 +34,13 @@ export default function AuthPage() {
       }
 
       const data = await response.json();
-      document.cookie = `token=${data.token}; path=/; secure; samesite=strict`;
-      document.cookie = `userRole=${data.user.role}; path=/; secure; samesite=strict`;
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('userRole', data.user.role);
 
-      // Role-based redirection
+      // Fixed routing to match existing dashboard structure
       switch (data.user.role) {
         case 'super_admin':
-          router.push('/dashboard/super-admin');
+          router.push('/dashboard/superadmin');
           break;
         case 'admin':
           router.push('/dashboard/admin');
@@ -63,103 +63,101 @@ export default function AuthPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred.');
+        setError('Login failed');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-900 to-black">
-      {/* Full screen container with proper flexbox centering */}
-      <div className="min-h-screen flex items-center justify-center p-4">
-        {/* Centered form container */}
-        <div className="w-full max-w-md">
-          {/* Form card with enhanced styling */}
-          <div className="p-8 space-y-6 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/20">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
-              <p className="text-gray-600">Sign in to your account to continue</p>
-            </div>
+  const quickLogin = (role: string, pass: string) => {
+    setUsername(role);
+    setPassword(pass);
+  };
 
-            {/* Form */}
-            <form className="space-y-5" onSubmit={handleLogin}>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">
-                  Email Address
-                </Label>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-900 to-black">
+      <LampContainer>
+        <div className="flex items-center justify-center w-full h-full py-12">
+          <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+            <h2 className="text-2xl font-bold text-center text-gray-900">Academic AI Platform</h2>
+            
+            <form className="space-y-4" onSubmit={handleLogin}>
+              <div>
+                <Label htmlFor="username">Username</Label>
                 <Input
-                  id="email"
-                  type="email"
+                  id="username"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="Enter your email"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter username"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium">
-                  Password
-                </Label>
+              <div>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 px-4 bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
                 />
               </div>
-
-              {/* Error message */}
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-600 text-sm">{error}</p>
-                </div>
-              )}
-
-              {/* Submit button */}
-              <Button 
-                type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
-                disabled={loading}
-              >
+              
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Signing In...' : 'Sign In'}
               </Button>
             </form>
 
-            {/* Footer */}
-            <div className="text-center pt-4 border-t border-gray-200">
-              <p className="text-gray-600">
-                Dont have an account?{' '}
-                <Link 
-                  href="/auth/signup" 
-                  className="font-semibold text-blue-600 hover:text-blue-800 transition-colors duration-200"
+            {/* Quick Login Demo Accounts */}
+            <div className="text-center text-sm border-t pt-4">
+              <p className="font-medium mb-3 text-gray-700">Demo Accounts:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => quickLogin('superadmin', 'admin123')}
                 >
-                  Sign up here
-                </Link>
-              </p>
-              <Link 
-                href="/" 
-                className="inline-block mt-3 text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                  Super Admin
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => quickLogin('admin', 'admin123')}
+                >
+                  Admin
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => quickLogin('faculty', 'faculty123')}
+                >
+                  Faculty
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => quickLogin('student', 'student123')}
+                >
+                  Student
+                </Button>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => quickLogin('staff', 'staff123')}
               >
-                ← Back to home
-              </Link>
+                Staff
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Background decoration */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl"></div>
-      </div>
+      </LampContainer>
     </div>
   );
 }
