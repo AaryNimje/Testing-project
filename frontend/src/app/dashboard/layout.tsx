@@ -1,63 +1,52 @@
 'use client';
+
 import React, { useState } from 'react';
-import Sidebar from '@/components/dashboard/Sidebar';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import { THEME } from '@/lib/constants';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+// Simple placeholder components
+const Sidebar = ({ user, onLogoutAction }: any) => (
+  <div className="w-64 bg-gray-900 text-white p-4">
+    <div className="mb-4">
+      <h2 className="text-xl font-bold">{user?.name || 'User'}</h2>
+      <p className="text-sm text-gray-400">{user?.role || 'Role'}</p>
+    </div>
+    <nav className="space-y-2">
+      <a href="/dashboard" className="block p-2 hover:bg-gray-800 rounded">Dashboard</a>
+      <button onClick={onLogoutAction} className="block w-full text-left p-2 text-red-400 hover:bg-gray-800 rounded">Logout</button>
+    </nav>
+  </div>
+);
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const Header = ({ title }: any) => (
+  <header className="bg-gray-800 p-4 text-white">
+    <h1 className="text-xl font-bold">{title}</h1>
+  </header>
+);
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, logout, isLoading } = useAuth();
+  const router = useRouter();
   
-  // Mock user data for demonstration
-  const userData = {
-    fullName: 'John Doe',
-    role: 'admin',
-    id: '1',
-    email: 'john@example.com'
-  };
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Loading...</div>;
+  }
   
-  // Mock menu items
-  const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: () => <span>📊</span> },
-    { name: 'Users', path: '/dashboard/users', icon: () => <span>👥</span> },
-    { name: 'Settings', path: '/dashboard/settings', icon: () => <span>⚙️</span> }
-  ];
-
+  if (!user) {
+    router.push('/login');
+    return null;
+  }
+  
   return (
-    <div className="min-h-screen bg-black flex">
-      {/* Sidebar */}
-      <Sidebar 
-        isOpen={sidebarOpen}
-        toggleSidebarAction={() => setSidebarOpen(!sidebarOpen)}
-        menuItems={menuItems}
-        user={userData}
-        onLogoutAction={() => console.log('Logout clicked')}
-      />
+    <div className="min-h-screen flex bg-gray-900">
+      <Sidebar user={user} onLogoutAction={logout} />
       
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <DashboardHeader 
-          title="Dashboard"
-          toggleSidebarAction={() => setSidebarOpen(!sidebarOpen)}
-          user={userData}
-        />
+        <Header title={`${user.role.replace('_', ' ')} Dashboard`} />
         
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+        <main className="flex-1 overflow-auto p-6 bg-gray-800 text-white">
+          {children}
         </main>
-      </div>
-      
-      {/* Background Effects */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-72 h-72 bg-pink-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl" />
       </div>
     </div>
   );

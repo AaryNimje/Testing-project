@@ -1,5 +1,59 @@
+// app/api/auth/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { USERS } from '@/lib/constants';
+
+// Define user record type
+type UserRecord = {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  email: string;
+  avatar: string;
+};
+
+// Define your mock users
+const USERS: Record<string, UserRecord> = {
+  super_admin: {
+    id: '1',
+    username: 'superadmin',
+    password: 'admin123',
+    name: 'Super Administrator',
+    email: 'superadmin@platform.edu',
+    avatar: '/avatars/superadmin.jpg'
+  },
+  admin: {
+    id: '2',
+    username: 'admin',
+    password: 'admin123',
+    name: 'University Admin',
+    email: 'admin@university.edu',
+    avatar: '/avatars/admin.jpg'
+  },
+  faculty: {
+    id: '3',
+    username: 'faculty',
+    password: 'faculty123',
+    name: 'Dr. Sarah Johnson',
+    email: 'faculty@university.edu',
+    avatar: '/avatars/faculty.jpg'
+  },
+  student: {
+    id: '4',
+    username: 'student',
+    password: 'student123',
+    name: 'Alex Chen',
+    email: 'student@university.edu',
+    avatar: '/avatars/student.jpg'
+  },
+  staff: {
+    id: '5',
+    username: 'staff',
+    password: 'staff123',
+    name: 'Maria Rodriguez',
+    email: 'staff@university.edu',
+    avatar: '/avatars/staff.jpg'
+  }
+};
 
 // Types
 interface LoginRequest {
@@ -42,15 +96,17 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check credentials against our user database
-    let authenticatedUser = null;
-    let userRole = null;
+    let authenticatedUser: UserRecord | null = null;
+    let userRole: string | null = null;
 
-    Object.entries(USERS).forEach(([role, user]) => {
+    // Use for...of loop instead of forEach for better type inference
+    for (const [role, user] of Object.entries(USERS)) {
       if (user.username === username && user.password === password) {
         authenticatedUser = user;
         userRole = role;
+        break; // Exit loop early when found
       }
-    });
+    }
 
     if (!authenticatedUser || !userRole) {
       return NextResponse.json(
@@ -138,7 +194,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Get full user data
-    const user = USERS[userInfo.role];
+    const userRole = userInfo.role as keyof typeof USERS;
+    const user = USERS[userRole];
     
     if (!user) {
       return NextResponse.json(
@@ -233,51 +290,4 @@ function verifySimpleToken(token: string): { username: string; role: string } | 
   } catch {
     return null;
   }
-}
-
-// Middleware helper for protecting routes
-export function createAuthMiddleware() {
-  return async (request: NextRequest) => {
-    const token = request.cookies.get('auth-token')?.value;
-    
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-    
-    const userInfo = verifySimpleToken(token);
-    
-    if (!userInfo) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-    
-    // Add user info to request headers for downstream use
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-user-role', userInfo.role);
-    requestHeaders.set('x-user-username', userInfo.username);
-    
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
-  };
-}
-
-// Role-based access control helper
-export function requireRole(allowedRoles: string[]) {
-  return (request: NextRequest) => {
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userRole || !allowedRoles.includes(userRole)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Insufficient permissions' 
-        },
-        { status: 403 }
-      );
-    }
-    
-    return null; // Allow access
-  };
 }
