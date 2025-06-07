@@ -113,8 +113,7 @@ export default function AuthPage() {
               </Button>
             </form>
 
-            {/* Quick Login Demo Accounts */}
-            <div className="text-center text-sm border-t pt-4">
+            {/*<div className="text-center text-sm border-t pt-4">
               <p className="font-medium mb-3 text-gray-700">Demo Accounts:</p>
               <div className="grid grid-cols-2 gap-2">
                 <Button 
@@ -154,7 +153,7 @@ export default function AuthPage() {
               >
                 Staff
               </Button>
-            </div>
+            </div>*/}
           </div>
         </div>
       </LampContainer>

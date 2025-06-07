@@ -1,304 +1,222 @@
-'use client';
+"use client";
 
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import BentoGrid from '@/components/dashboard/BentoGrid';
-import BentoCard from '@/components/dashboard/BentoCard';
-import ChartCard from '@/components/dashboard/ChartCard';
-import TableCard from '@/components/dashboard/TableCard';
-import { 
-  BookOpen, 
-  Calendar, 
-  Target, 
-  Clock, 
-  TrendingUp,
-  Users,
-  Award,
-  CheckCircle,
-  AlertCircle,
-  Star
-} from 'lucide-react';
+import React, { useState } from "react";
+import {
+  IconBook,
+  IconBrain,
+  IconChartBar,
+  IconClock,
+  IconCalendarEvent,
+  IconClipboard,
+  IconMessageChatbot,
+  IconUser,
+} from "@tabler/icons-react";
+
+// Import local components directly to avoid module resolution issues
+import { BentoGrid, BentoGridItem } from "../../../components/ui/bento-grid";
 
 export default function StudentDashboard() {
-  // Mock data for demonstration
-  const academicStats = [
-    { label: 'Current GPA', value: '3.85', change: '+0.12', trend: 'up' },
-    { label: 'Assignments', value: '3', change: '2 overdue', trend: 'down' },
-    { label: 'Next Class', value: 'Physics', change: 'Room 204-A', trend: 'neutral' },
-    { label: 'Study Time', value: '2.5 hrs', change: 'yesterday', trend: 'neutral' },
-    { label: 'Goals', value: '75%', change: 'Complete!', trend: 'up' }
-  ];
-
-  const recentAssignments = [
-    { id: 1, course: 'Physics 101', assignment: 'Momentum Lab Report', dueDate: '2024-01-15', status: 'overdue', grade: null },
-    { id: 2, course: 'Calculus II', assignment: 'Integration Problems', dueDate: '2024-01-16', status: 'pending', grade: null },
-    { id: 3, course: 'English Lit', assignment: 'Shakespeare Essay', dueDate: '2024-01-18', status: 'submitted', grade: 'A-' },
-    { id: 4, course: 'Chemistry', assignment: 'Periodic Table Quiz', dueDate: '2024-01-20', status: 'upcoming', grade: null }
-  ];
-
-  const upcomingClasses = [
-    { time: '09:00', course: 'Physics 101', room: '204-A', instructor: 'Dr. Johnson' },
-    { time: '11:00', course: 'Calculus II', room: '301-B', instructor: 'Prof. Martinez' },
-    { time: '14:00', course: 'English Literature', room: '105-C', instructor: 'Ms. Wilson' },
-    { time: '16:00', course: 'Chemistry Lab', room: 'Lab-2', instructor: 'Dr. Brown' }
-  ];
-
-  const courseProgress = [
-    { course: 'Physics 101', progress: 78, grade: 'B+', credits: 4 },
-    { course: 'Calculus II', progress: 85, grade: 'A-', credits: 4 },
-    { course: 'English Literature', progress: 92, grade: 'A', credits: 3 },
-    { course: 'Chemistry', progress: 73, grade: 'B', credits: 4 }
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'overdue': return 'text-red-600 bg-red-50';
-      case 'pending': return 'text-yellow-600 bg-yellow-50';
-      case 'submitted': return 'text-blue-600 bg-blue-50';
-      case 'upcoming': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
+  // Simulated user data - replace with actual auth
+  const [user, setUser] = useState({
+    name: "Alex Johnson",
+    role: "student"
+  });
 
   return (
-    <div className="dashboard-container">
-      <DashboardHeader 
-        title="Student Dashboard"
-        subtitle="Track your academic progress and stay organized"
-        actions={[
-          { label: 'AI Tutor', icon: <BookOpen className="w-4 h-4" />, primary: true },
-          { label: 'Study Tools', icon: <Target className="w-4 h-4" /> }
-        ]}
-      />
-
-      <div className="dashboard-main">
-        {/* Academic Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-          {academicStats.map((stat, index) => (
-            <div key={index} className="metric-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className={`text-xs mt-1 ${
-                    stat.trend === 'up' ? 'text-green-600' : 
-                    stat.trend === 'down' ? 'text-red-600' : 
-                    'text-gray-500'
-                  }`}>
-                    {stat.change}
-                  </p>
-                </div>
-                <div className={`metric-icon ${
-                  index === 0 ? 'blue' :
-                  index === 1 ? 'red' :
-                  index === 2 ? 'purple' :
-                  index === 3 ? 'orange' : 'green'
-                }`}>
-                  {index === 0 && <TrendingUp className="w-4 h-4" />}
-                  {index === 1 && <AlertCircle className="w-4 h-4" />}
-                  {index === 2 && <BookOpen className="w-4 h-4" />}
-                  {index === 3 && <Clock className="w-4 h-4" />}
-                  {index === 4 && <Target className="w-4 h-4" />}
-                </div>
-              </div>
-            </div>
-          ))}
+    <div className="space-y-6 p-2">
+      {/* User greeting */}
+      <div className="flex items-center mb-4">
+        <div className="h-10 w-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center text-white mr-3">
+          <IconUser className="h-5 w-5" />
         </div>
-
-        <BentoGrid>
-          {/* Academic Progress Tracker */}
-          <BentoCard 
-            title="Academic Progress" 
-            className="col-span-1 md:col-span-2"
-            icon={<TrendingUp className="w-5 h-5 text-blue-600" />}
-          >
-            <div className="space-y-4 mt-4">
-              {courseProgress.map((course, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">{course.course}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-600">{course.grade}</span>
-                      <span className="text-xs text-gray-500">{course.credits} credits</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${course.progress}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500">{course.progress}% complete</div>
-                </div>
-              ))}
-            </div>
-          </BentoCard>
-
-          {/* Assignment & Calendar Manager */}
-          <BentoCard 
-            title="Upcoming Assignments" 
-            className="col-span-1 md:col-span-2"
-            icon={<Calendar className="w-5 h-5 text-purple-600" />}
-          >
-            <div className="space-y-3 mt-4">
-              {recentAssignments.slice(0, 4).map((assignment) => (
-                <div key={assignment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {assignment.assignment}
-                    </p>
-                    <p className="text-xs text-gray-500">{assignment.course}</p>
-                    <p className="text-xs text-gray-400">Due: {assignment.dueDate}</p>
-                  </div>
-                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(assignment.status)}`}>
-                    {assignment.status}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </BentoCard>
-
-          {/* Today's Schedule */}
-          <BentoCard 
-            title="Today's Classes" 
-            className="col-span-1 md:col-span-1"
-            icon={<Clock className="w-5 h-5 text-green-600" />}
-          >
-            <div className="space-y-3 mt-4">
-              {upcomingClasses.map((class_, index) => (
-                <div key={index} className="flex items-center space-x-3">
-                  <div className="flex-shrink-0 w-12 text-center">
-                    <span className="text-xs font-medium text-gray-600">{class_.time}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{class_.course}</p>
-                    <p className="text-xs text-gray-500">{class_.room} • {class_.instructor}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </BentoCard>
-
-          {/* AI Learning Assistant */}
-          <BentoCard 
-            title="AI Learning Tools" 
-            className="col-span-1 md:col-span-1"
-            icon={<BookOpen className="w-5 h-5 text-orange-600" />}
-          >
-            <div className="space-y-3 mt-4">
-              <button className="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <div className="flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-700">AI Tutor</span>
-                </div>
-                <p className="text-xs text-blue-600 mt-1">Get homework help</p>
-              </button>
-              
-              <button className="w-full text-left p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                <div className="flex items-center space-x-2">
-                  <Target className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-700">Study Guide</span>
-                </div>
-                <p className="text-xs text-green-600 mt-1">Generate study materials</p>
-              </button>
-              
-              <button className="w-full text-left p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-purple-600" />
-                  <span className="text-sm font-medium text-purple-700">Debate Partner</span>
-                </div>
-                <p className="text-xs text-purple-600 mt-1">Practice arguments</p>
-              </button>
-            </div>
-          </BentoCard>
-
-          {/* Study Analytics */}
-          <ChartCard
-            title="Study Time Analytics"
-            subtitle="Weekly study hours by subject"
-            className="col-span-1 md:col-span-2"
-            icon={<Clock className="w-5 h-5 text-indigo-600" />}
-          >
-            <div className="mt-4 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Physics</span>
-                <span className="text-sm font-medium text-gray-900">8.5 hrs</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '85%' }} />
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Calculus</span>
-                <span className="text-sm font-medium text-gray-900">6.2 hrs</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: '62%' }} />
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Literature</span>
-                <span className="text-sm font-medium text-gray-900">4.1 hrs</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-purple-500 h-2 rounded-full" style={{ width: '41%' }} />
-              </div>
-            </div>
-          </ChartCard>
-
-          {/* Achievement Tracking */}
-          <BentoCard 
-            title="Achievements" 
-            className="col-span-1 md:col-span-1"
-            icon={<Award className="w-5 h-5 text-yellow-600" />}
-          >
-            <div className="space-y-3 mt-4">
-              <div className="flex items-center space-x-3 p-2 bg-yellow-50 rounded-lg">
-                <Star className="w-5 h-5 text-yellow-500" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Deans List</p>
-                  <p className="text-xs text-gray-500">Fall 2023</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3 p-2 bg-blue-50 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Perfect Attendance</p>
-                  <p className="text-xs text-gray-500">Last month</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3 p-2 bg-green-50 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-green-500" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">GPA Improvement</p>
-                  <p className="text-xs text-gray-500">+0.3 this semester</p>
-                </div>
-              </div>
-            </div>
-          </BentoCard>
-        </BentoGrid>
-
-        {/* Quick Actions */}
-        <div className="quick-actions mt-8">
-          <button className="quick-action-btn">
-            <BookOpen className="quick-action-icon" />
-            <span className="quick-action-text">Study Tools</span>
-          </button>
-          <button className="quick-action-btn">
-            <Calendar className="quick-action-icon" />
-            <span className="quick-action-text">My Schedule</span>
-          </button>
-          <button className="quick-action-btn">
-            <Users className="quick-action-icon" />
-            <span className="quick-action-text">Study Groups</span>
-          </button>
-          <button className="quick-action-btn">
-            <Target className="quick-action-icon" />
-            <span className="quick-action-text">Set Goals</span>
-          </button>
+        <div>
+          <p className="text-gray-300 text-sm">Hello,</p>
+          <h2 className="text-white text-xl font-medium">{user.name}</h2>
         </div>
       </div>
+
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">Student Dashboard</h1>
+        <p className="text-gray-300">Welcome back! Here's your academic overview.</p>
+      </div>
+
+      <BentoGrid className="max-w-full">
+        {studentItems.map((item, i: number) => (
+          <BentoGridItem
+            key={i}
+            title={item.title}
+            description={item.description}
+            header={item.header}
+            icon={item.icon}
+            className={i === 3 || i === 6 ? "md:col-span-2" : ""}
+          />
+        ))}
+      </BentoGrid>
     </div>
   );
 }
+
+// Skeleton component with academic theme styling
+const Skeleton = ({ className }: { className?: string }) => (
+  <div className={`flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 ${className}`}></div>
+);
+
+// Course Progress component
+const CourseProgress = () => (
+  <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4 overflow-hidden">
+    <div className="w-full">
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Current Progress</h3>
+      <div className="space-y-3 overflow-y-auto max-h-[calc(100%-2rem)]">
+        {[
+          { course: "Physics 101", progress: 78 },
+          { course: "Calculus II", progress: 65 },
+          { course: "English Literature", progress: 92 },
+          { course: "Computer Science", progress: 88 },
+        ].map((course, idx) => (
+          <div key={idx}>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-white truncate mr-2">{course.course}</span>
+              <span className="text-cyan-400 whitespace-nowrap">{course.progress}%</span>
+            </div>
+            <div className="h-2 bg-slate-700 rounded-full">
+              <div
+                className="h-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full"
+                style={{ width: `${course.progress}%` }}
+              ></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Upcoming Assignments component
+const UpcomingAssignments = () => (
+  <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4 overflow-hidden">
+    <div className="w-full">
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Upcoming Assignments</h3>
+      <div className="space-y-3 overflow-y-auto max-h-[calc(100%-2rem)]">
+        {[
+          { course: "Physics 101", assignment: "Lab Report", due: "Tomorrow" },
+          { course: "Calculus II", assignment: "Problem Set 5", due: "3 days" },
+          { course: "English Lit", assignment: "Essay Draft", due: "1 week" },
+        ].map((item, idx) => (
+          <div key={idx} className="flex justify-between items-center border-b border-slate-700/50 pb-2">
+            <div className="overflow-hidden">
+              <p className="text-white text-sm truncate">{item.assignment}</p>
+              <p className="text-xs text-gray-400 truncate">{item.course}</p>
+            </div>
+            <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ml-2 ${
+              item.due === "Tomorrow" 
+                ? "bg-red-500/20 text-red-300" 
+                : "bg-blue-500/20 text-blue-300"
+            }`}>
+              {item.due}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Schedule component
+const Schedule = () => (
+  <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4 overflow-hidden">
+    <div className="w-full">
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Today's Schedule</h3>
+      <div className="space-y-3 overflow-y-auto max-h-[calc(100%-2rem)]">
+        {[
+          { time: "09:00 AM", course: "Physics 101", location: "Science Hall 305" },
+          { time: "11:00 AM", course: "Calculus II", location: "Math Building 210" },
+          { time: "02:00 PM", course: "English Literature", location: "Arts Center 120" },
+          { time: "04:00 PM", course: "Study Group", location: "Library - Room 4" },
+        ].map((item, idx) => (
+          <div key={idx} className="flex items-center space-x-3">
+            <div className="bg-blue-900/30 text-cyan-400 text-xs rounded-md p-1 w-20 text-center shrink-0">
+              {item.time}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-white text-sm truncate">{item.course}</p>
+              <p className="text-xs text-gray-400 truncate">{item.location}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Stats component
+const Stats = () => (
+  <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4">
+    <div className="w-full grid grid-cols-2 gap-4">
+      <div className="bg-slate-700/30 p-3 rounded-lg">
+        <p className="text-xs text-gray-400">Current GPA</p>
+        <p className="text-2xl font-bold text-white">3.8</p>
+        <p className="text-xs text-cyan-400">+0.2 this semester</p>
+      </div>
+      <div className="bg-slate-700/30 p-3 rounded-lg">
+        <p className="text-xs text-gray-400">Attendance</p>
+        <p className="text-2xl font-bold text-white">98%</p>
+        <p className="text-xs text-cyan-400">Excellent</p>
+      </div>
+      <div className="bg-slate-700/30 p-3 rounded-lg">
+        <p className="text-xs text-gray-400">Study Hours</p>
+        <p className="text-2xl font-bold text-white">24</p>
+        <p className="text-xs text-cyan-400">This week</p>
+      </div>
+      <div className="bg-slate-700/30 p-3 rounded-lg">
+        <p className="text-xs text-gray-400">Assignments</p>
+        <p className="text-2xl font-bold text-white">5</p>
+        <p className="text-xs text-red-300">2 due soon</p>
+      </div>
+    </div>
+  </div>
+);
+
+const studentItems = [
+  {
+    title: "Course Progress",
+    description: "Track your progress in current courses",
+    header: <CourseProgress />,
+    icon: <IconBook className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "Upcoming Assignments",
+    description: "View your pending assignments and deadlines",
+    header: <UpcomingAssignments />,
+    icon: <IconClipboard className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "Today's Schedule",
+    description: "Check your classes and appointments for today",
+    header: <Schedule />,
+    icon: <IconCalendarEvent className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "Performance Stats",
+    description: "View your academic performance metrics",
+    header: <Stats />,
+    icon: <IconChartBar className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "AI Tutor",
+    description: "Get 24/7 help with any subject",
+    header: <Skeleton className="bg-gradient-to-br from-blue-900 to-cyan-900 border-cyan-800/50" />,
+    icon: <IconBrain className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "Study Timer",
+    description: "Track and optimize your study sessions",
+    header: <Skeleton />,
+    icon: <IconClock className="h-4 w-4 text-cyan-400" />,
+  },
+  {
+    title: "AI Study Assistant",
+    description: "Generate study guides and get homework help",
+    header: <Skeleton className="bg-gradient-to-br from-blue-900 to-cyan-900 border-cyan-800/50" />,
+    icon: <IconMessageChatbot className="h-4 w-4 text-cyan-400" />,
+  },
+];
