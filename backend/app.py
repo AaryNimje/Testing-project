@@ -99,7 +99,7 @@ def dashboard_stats():
     })
 
 # Create tables if they don't exist
-@app.before_first_request
+@app.before_request
 def create_tables():
     Base.metadata.create_all(bind=engine)
 
