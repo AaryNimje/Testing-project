@@ -1,3 +1,4 @@
+// src/app/dashboard/layout.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -14,8 +15,10 @@ import {
   IconBrain,
   IconCalendar,
   IconFileText,
-  IconBrandTabler,
 } from "@tabler/icons-react";
+import { useAuth } from "@/contexts/AuthContext";
+import ProtectedLayout from "@/components/layout/ProtectedLayout";
+import { UserRole } from "@/lib/types";
 
 export default function DashboardLayout({
   children,
@@ -23,15 +26,9 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<string>("");
+  const { user, logout } = useAuth();
   const pathname = usePathname();
-
-  // Determine user role from URL path
-  useEffect(() => {
-    const pathSegments = pathname.split("/");
-    const dashboardType = pathSegments.length > 2 ? pathSegments[2] : "student";
-    setRole(dashboardType);
-  }, [pathname]);
+  const role = user?.role || 'student';
 
   // Role-specific navigation links
   const getNavLinks = () => {
@@ -53,8 +50,9 @@ export default function DashboardLayout({
       },
       {
         label: "Logout",
-        href: "/auth",
+        href: "#",
         icon: <IconLogout className="h-5 w-5 shrink-0 text-cyan-400" />,
+        onClick: logout,
       },
     ];
 
@@ -118,7 +116,7 @@ export default function DashboardLayout({
           icon: <IconChartBar className="h-5 w-5 shrink-0 text-cyan-400" />,
         },
       ],
-      superadmin: [
+      super_admin: [
         {
           label: "System",
           href: `/dashboard/${role}/system`,
@@ -134,15 +132,10 @@ export default function DashboardLayout({
           href: `/dashboard/${role}/analytics`,
           icon: <IconChartBar className="h-5 w-5 shrink-0 text-cyan-400" />,
         },
-        {
-          label: "AI Config",
-          href: `/dashboard/${role}/ai-config`,
-          icon: <IconBrain className="h-5 w-5 shrink-0 text-cyan-400" />,
-        },
       ],
     };
 
-    return [...(roleLinks[role] || []), ...commonLinks];
+    return [...(roleLinks[role as UserRole] || []), ...commonLinks];
   };
 
   const Logo = () => {
@@ -173,38 +166,43 @@ export default function DashboardLayout({
   const links = getNavLinks();
 
   return (
-    <div className="min-h-screen max-h-screen overflow-hidden bg-gradient-to-b from-blue-900 to-black">
-      <div className="flex h-screen">
-        <Sidebar open={open} setOpen={setOpen}>
-          <SidebarBody className="justify-between gap-10 bg-slate-900/90 dark:bg-slate-900/90 border-r border-white/10 h-full">
-            <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
-              {open ? <Logo /> : <LogoIcon />}
-              <div className="mt-8 flex flex-col gap-2">
-                {links.map((link, idx) => (
-                  <SidebarLink key={idx} link={link} />
-                ))}
+    <ProtectedLayout>
+      <div className="min-h-screen max-h-screen overflow-hidden bg-gradient-to-b from-blue-900 to-black">
+        <div className="flex h-screen">
+          <Sidebar open={open} setOpen={setOpen}>
+            <SidebarBody className="justify-between gap-10 bg-slate-900/90 dark:bg-slate-900/90 border-r border-white/10 h-full">
+              <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                {open ? <Logo /> : <LogoIcon />}
+                <div className="mt-8 flex flex-col gap-2">
+                  {links.map((link, idx) => (
+                    <SidebarLink key={idx} link={link} />
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="mb-4">
-              <SidebarLink
-                link={{
-                  label: `${role.charAt(0).toUpperCase() + role.slice(1)} Role`,
-                  href: "#",
-                  icon: (
-                    <div className="h-7 w-7 shrink-0 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold">
-                      {role.charAt(0).toUpperCase()}
-                    </div>
-                  ),
-                }}
-              />
-            </div>
-          </SidebarBody>
-        </Sidebar>
+              <div className="mb-4">
+                <SidebarLink
+                  link={{
+                    label: `${user?.name || "User"}`,
+                    href: "#",
+                    icon: (
+                      <div className="h-7 w-7 shrink-0 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold">
+                        {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                      </div>
+                    ),
+                  }}
+                />
+                <div className="mt-2 px-3">
+                  <div className="text-xs text-gray-400">{role.charAt(0).toUpperCase() + role.slice(1)} Role</div>
+                </div>
+              </div>
+            </SidebarBody>
+          </Sidebar>
 
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">{children}</div>
-        </main>
+          <main className="flex-1 overflow-auto">
+            <div className="p-6">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ProtectedLayout>
   );
 }

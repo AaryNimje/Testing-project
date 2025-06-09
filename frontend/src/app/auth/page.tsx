@@ -1,159 +1,127 @@
+// src/app/auth/page.tsx
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LampContainer } from "@/components/aceternity/lamp-effect";
+import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AuthPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState('');
   const router = useRouter();
-
+  
+  const { login, isAuthenticated, user, loading, error, clearError } = useAuth();
+  
+  // If user is already authenticated, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const dashboardPath = `/dashboard/${user.role}`;
+      router.push(dashboardPath);
+    }
+  }, [isAuthenticated, user, router]);
+  
+  // Sync context error with local error
+  useEffect(() => {
+    if (error) {
+      setLocalError(error);
+    }
+  }, [error]);
+  
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
+    setLocalError(''); // Clear previous errors
+    clearError(); // Clear context errors
+    
+    // Validate inputs
+    if (!email || !password) {
+      setLocalError('Email and password are required');
+      return;
+    }
+    
     try {
-      const response = await fetch('/api/auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
-      }
-
-      const data = await response.json();
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userRole', data.user.role);
-
-      // Fixed routing to match existing dashboard structure
-      switch (data.user.role) {
-        case 'super_admin':
-          router.push('/dashboard/superadmin');
-          break;
-        case 'admin':
-          router.push('/dashboard/admin');
-          break;
-        case 'faculty':
-          router.push('/dashboard/faculty');
-          break;
-        case 'student':
-          router.push('/dashboard/student');
-          break;
-        case 'staff':
-          router.push('/dashboard/staff');
-          break;
-        default:
-          router.push('/dashboard');
-          break;
-      }
-
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Login failed');
-      }
-    } finally {
-      setLoading(false);
+      await login({ email, password });
+    } catch (err) {
+      // Error is handled by the context
     }
   };
-
-  const quickLogin = (role: string, pass: string) => {
-    setUsername(role);
-    setPassword(pass);
-  };
-
+  
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-900 to-black">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-900 to-black">
       <LampContainer>
         <div className="flex items-center justify-center w-full h-full py-12">
-          <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-center text-gray-900">Academic AI Platform</h2>
+          <div className="w-full max-w-md p-8 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 shadow-xl">
+            <div className="mb-6 text-center">
+              <h2 className="text-2xl font-bold text-white mb-1">Welcome Back</h2>
+              <p className="text-gray-400">Sign in to your Academic AI Platform account</p>
+            </div>
             
-            <form className="space-y-4" onSubmit={handleLogin}>
-              <div>
-                <Label htmlFor="username">Username</Label>
+            {localError && (
+              <Alert variant="destructive" className="mb-4 bg-red-900/40 border-red-800 text-white">
+                <AlertDescription>{localError}</AlertDescription>
+              </Alert>
+            )}
+            
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-white">Email</Label>
                 <Input
-                  id="username"
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white"
+                  placeholder="you@example.com"
                 />
               </div>
-              <div>
-                <Label htmlFor="password">Password</Label>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-white">Password</Label>
                 <Input
                   id="password"
                   type="password"
-                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  className="bg-white/10 border-white/20 text-white"
+                  placeholder="••••••••"
                 />
               </div>
               
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing In...' : 'Sign In'}
-              </Button>
-            </form>
-
-            {/*<div className="text-center text-sm border-t pt-4">
-              <p className="font-medium mb-3 text-gray-700">Demo Accounts:</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => quickLogin('superadmin', 'admin123')}
-                >
-                  Super Admin
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => quickLogin('admin', 'admin123')}
-                >
-                  Admin
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => quickLogin('faculty', 'faculty123')}
-                >
-                  Faculty
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => quickLogin('student', 'student123')}
-                >
-                  Student
-                </Button>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="w-full mt-2"
-                onClick={() => quickLogin('staff', 'staff123')}
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 transition-all"
+                disabled={loading}
               >
-                Staff
+                {loading ? 'Signing in...' : 'Sign in'}
               </Button>
-            </div>*/}
+              
+              <div className="text-center mt-4">
+                <p className="text-gray-400">
+                  Don't have an account?{' '}
+                  <Link href="/auth/signup" className="text-cyan-400 hover:text-cyan-300">
+                    Sign up
+                  </Link>
+                </p>
+              </div>
+            </form>
           </div>
         </div>
       </LampContainer>

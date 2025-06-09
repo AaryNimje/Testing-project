@@ -7,17 +7,25 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
+from auth_routes import auth_bp, init_jwt
+from models import Base, engine
 
 # Load environment variables
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "https://your-render-domain.onrender.com"])
 
 # Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY')
+
+# Initialize JWT
+jwt = init_jwt(app)
+
+# Register blueprints
+app.register_blueprint(auth_bp)
 
 @app.route('/')
 def home():
@@ -36,10 +44,19 @@ def health_check():
         "services": {
             "flask": "running",
             "gemini_api": "configured" if app.config['GEMINI_API_KEY'] else "not_configured",
-            "database": "pending",
+            "database": "connected" if check_database_connection() else "disconnected",
             "mcp_server": "pending"
         }
     })
+
+def check_database_connection():
+    """Check if database connection is working"""
+    try:
+        # Try to connect to the database
+        engine.connect()
+        return True
+    except Exception:
+        return False
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -62,6 +79,29 @@ def chat():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/dashboard/stats', methods=['GET'])
+def dashboard_stats():
+    """Get dashboard statistics for the frontend"""
+    # This would typically be fetched from your database
+    return jsonify({
+        "userCount": 1247,
+        "newToday": 23,
+        "systemUptime": 99.8,
+        "dailyCost": 0.12,
+        "dailyCap": 0.16,
+        "apiHealth": 98.7,
+        "recentActivity": [
+            {"user": "Dr. Johnson", "action": "Created quiz", "timestamp": "2025-06-09T10:30:00Z"},
+            {"user": "Alex Chen", "action": "Completed assignment", "timestamp": "2025-06-09T09:45:00Z"},
+            {"user": "Maria Rodriguez", "action": "Generated report", "timestamp": "2025-06-09T08:15:00Z"}
+        ]
+    })
+
+# Create tables if they don't exist
+@app.before_first_request
+def create_tables():
+    Base.metadata.create_all(bind=engine)
 
 if __name__ == '__main__':
     app.run(
