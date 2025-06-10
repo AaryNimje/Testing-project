@@ -14,7 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
-import { UserManagement } from "@/components/dashboard/superadmin/UserManagement";
+import UserManagement from "@/components/dashboard/superadmin/UserManagement"
 import { useAuth } from "@/contexts/AuthContext";
 import { dashboardApi } from "@/lib/api-client";
 

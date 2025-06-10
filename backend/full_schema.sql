@@ -1,110 +1,671 @@
--- Academic AI Platform Complete Database Schema
--- Version: 1.0
--- Description: Comprehensive schema for multi-role academic platform with AI integration
+-- =====================================================
+-- Academic AI Platform - Complete Database Schema v2.0
+-- =====================================================
+-- Native authentication, AI prompt templating, Google Workspace integration,
+-- and LangChain conversation history support
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- =====================================================
--- CORE USER MANAGEMENT
+-- ENUMS AND TYPES
 -- =====================================================
 
--- Users table - Core authentication and profile
+CREATE TYPE user_role AS ENUM ('superadmin', 'admin', 'faculty', 'student', 'staff');
+CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending_verification');
+CREATE TYPE auth_provider AS ENUM ('local', 'google', 'microsoft', 'github');
+CREATE TYPE tool_category AS ENUM ('learning', 'teaching', 'assessment', 'administrative', 'communication', 'analytics');
+CREATE TYPE conversation_role AS ENUM ('system', 'user', 'assistant', 'function', 'tool');
+CREATE TYPE memory_type AS ENUM ('conversation_buffer', 'summary', 'knowledge_graph', 'entity', 'vectorstore');
+CREATE TYPE google_service AS ENUM ('drive', 'sheets', 'docs', 'slides', 'calendar', 'gmail', 'meet', 'forms', 'classroom');
+CREATE TYPE prompt_category AS ENUM ('system', 'tool', 'user', 'agent', 'workflow', 'evaluation');
+
+-- =====================================================
+-- NATIVE AUTHENTICATION SYSTEM
+-- =====================================================
+
+-- Core users table with native auth
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clerk_id VARCHAR(255) UNIQUE, -- Clerk authentication ID
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     username VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255), -- For local auth fallback
+    password_hash VARCHAR(255), -- For local auth
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    middle_name VARCHAR(100),
     display_name VARCHAR(200),
     phone VARCHAR(20),
     phone_verified BOOLEAN DEFAULT FALSE,
     email_verified BOOLEAN DEFAULT FALSE,
     avatar_url TEXT,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('superadmin', 'admin', 'faculty', 'student', 'staff')),
-    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'pending')),
+    role user_role NOT NULL DEFAULT 'student',
+    status user_status DEFAULT 'pending_verification',
+    
+    -- Authentication fields
+    auth_provider auth_provider DEFAULT 'local',
+    oauth_provider_id VARCHAR(255),
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret VARCHAR(255),
+    
+    -- Session management
     last_login_at TIMESTAMP,
+    last_activity_at TIMESTAMP,
     login_count INTEGER DEFAULT 0,
     failed_login_attempts INTEGER DEFAULT 0,
     locked_until TIMESTAMP,
+    
+    -- Preferences
     preferred_language VARCHAR(10) DEFAULT 'en',
     timezone VARCHAR(50) DEFAULT 'UTC',
     theme VARCHAR(20) DEFAULT 'dark',
     notification_preferences JSONB DEFAULT '{}',
+    
+    -- Metadata
+    institution_id UUID,
+    department_id UUID,
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by UUID REFERENCES users(id),
-    updated_by UUID REFERENCES users(id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User sessions for tracking active sessions
+-- Password reset tokens
+CREATE TABLE password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Email verification tokens
+CREATE TABLE email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- OAuth connections for multiple providers
+CREATE TABLE oauth_connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider auth_provider NOT NULL,
+    provider_user_id VARCHAR(255) NOT NULL,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP,
+    profile_data JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(provider, provider_user_id)
+);
+
+-- Active sessions tracking
 CREATE TABLE user_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     session_token VARCHAR(255) UNIQUE NOT NULL,
-    device_info JSONB,
+    device_info JSONB DEFAULT '{}',
     ip_address INET,
     user_agent TEXT,
     expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Role permissions mapping
-CREATE TABLE permissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    resource VARCHAR(100) NOT NULL,
-    action VARCHAR(50) NOT NULL,
+-- =====================================================
+-- AI PROMPT TEMPLATING SYSTEM
+-- =====================================================
+
+-- Prompt templates library
+CREATE TABLE prompt_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(200) NOT NULL,
+    category prompt_category NOT NULL,
+    subcategory VARCHAR(100),
     description TEXT,
+    template_content TEXT NOT NULL,
+    variables JSONB DEFAULT '[]', -- Array of {name, type, description, required, default}
+    metadata JSONB DEFAULT '{}',
+    
+    -- Versioning
+    version INTEGER DEFAULT 1,
+    parent_id UUID REFERENCES prompt_templates(id),
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    -- Access control
+    visibility VARCHAR(20) DEFAULT 'private' CHECK (visibility IN ('private', 'institution', 'public')),
+    created_by UUID REFERENCES users(id),
+    approved_by UUID REFERENCES users(id),
+    approved_at TIMESTAMP,
+    
+    -- Usage tracking
+    usage_count INTEGER DEFAULT 0,
+    avg_rating DECIMAL(3,2),
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(resource, action)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Role to permission mapping
-CREATE TABLE role_permissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    role VARCHAR(50) NOT NULL,
-    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+-- Agent-specific prompts
+CREATE TABLE agent_prompts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_name VARCHAR(100) NOT NULL UNIQUE,
+    system_prompt TEXT NOT NULL,
+    instruction_prompt TEXT,
+    context_prompt TEXT,
+    output_format_prompt TEXT,
+    
+    -- Model preferences
+    preferred_model VARCHAR(50),
+    temperature DECIMAL(3,2) DEFAULT 0.7,
+    max_tokens INTEGER DEFAULT 2048,
+    top_p DECIMAL(3,2) DEFAULT 0.9,
+    
+    -- Behavior settings
+    personality_traits JSONB DEFAULT '{}',
+    knowledge_domains TEXT[],
+    response_style VARCHAR(50),
+    
+    -- Chain of thought settings
+    use_chain_of_thought BOOLEAN DEFAULT TRUE,
+    reasoning_steps_prompt TEXT,
+    
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(role, permission_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User activity logs for audit trail
-CREATE TABLE user_activity_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- User custom prompts
+CREATE TABLE user_prompts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    prompt_content TEXT NOT NULL,
+    based_on_template UUID REFERENCES prompt_templates(id),
+    
+    -- Organization
+    folder VARCHAR(100),
+    tags TEXT[],
+    is_favorite BOOLEAN DEFAULT FALSE,
+    
+    -- Sharing
+    is_shared BOOLEAN DEFAULT FALSE,
+    share_token VARCHAR(100) UNIQUE,
+    shared_with_roles user_role[],
+    
+    usage_count INTEGER DEFAULT 0,
+    last_used_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Prompt execution history
+CREATE TABLE prompt_executions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id),
-    action VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(100),
-    resource_id UUID,
-    details JSONB DEFAULT '{}',
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_user_activity_user_id (user_id),
-    INDEX idx_user_activity_created_at (created_at)
+    prompt_template_id UUID REFERENCES prompt_templates(id),
+    user_prompt_id UUID REFERENCES user_prompts(id),
+    
+    -- Execution details
+    final_prompt TEXT NOT NULL,
+    variables_used JSONB DEFAULT '{}',
+    model_used VARCHAR(50),
+    
+    -- Results
+    response TEXT,
+    tokens_used INTEGER,
+    execution_time_ms INTEGER,
+    cost DECIMAL(10,6),
+    
+    -- Feedback
+    user_rating INTEGER CHECK (user_rating BETWEEN 1 AND 5),
+    user_feedback TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =====================================================
--- ACADEMIC STRUCTURE
+-- LANGCHAIN CONVERSATION HISTORY
 -- =====================================================
 
--- Institutions (for multi-tenant support)
+-- Conversations (chat sessions)
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    title VARCHAR(255),
+    description TEXT,
+    
+    -- Context
+    context_type VARCHAR(50), -- 'general', 'course', 'assignment', etc.
+    context_id UUID,
+    
+    -- Memory configuration
+    memory_type memory_type DEFAULT 'conversation_buffer',
+    memory_config JSONB DEFAULT '{}',
+    
+    -- State
+    is_active BOOLEAN DEFAULT TRUE,
+    last_message_at TIMESTAMP,
+    message_count INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    
+    -- Metadata
+    tags TEXT[],
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Conversation messages (LangChain compatible)
+CREATE TABLE conversation_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role conversation_role NOT NULL,
+    content TEXT NOT NULL,
+    
+    -- LangChain specific fields
+    additional_kwargs JSONB DEFAULT '{}',
+    example BOOLEAN DEFAULT FALSE,
+    
+    -- For function/tool messages
+    name VARCHAR(100),
+    function_call JSONB,
+    tool_call_id VARCHAR(100),
+    
+    -- Token tracking
+    tokens INTEGER,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ordering
+    sequence_number INTEGER NOT NULL
+);
+
+-- Conversation summaries (for summary memory)
+CREATE TABLE conversation_summaries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    summary TEXT NOT NULL,
+    message_range_start INTEGER NOT NULL,
+    message_range_end INTEGER NOT NULL,
+    tokens_summarized INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Entity memories (for entity memory)
+CREATE TABLE entity_memories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    entity_name VARCHAR(200) NOT NULL,
+    entity_type VARCHAR(50),
+    memories TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(conversation_id, entity_name)
+);
+
+-- Vector embeddings for semantic search
+CREATE TABLE conversation_embeddings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    message_id UUID REFERENCES conversation_messages(id) ON DELETE CASCADE,
+    content_chunk TEXT NOT NULL,
+    embedding vector(1536), -- OpenAI embeddings dimension
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Memory checkpoints for conversation replay
+CREATE TABLE memory_checkpoints (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    checkpoint_name VARCHAR(200),
+    memory_state JSONB NOT NULL,
+    message_count INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- GOOGLE WORKSPACE INTEGRATION
+-- =====================================================
+
+-- Google service connections per user
+CREATE TABLE google_workspace_connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    service google_service NOT NULL,
+    
+    -- OAuth tokens
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP,
+    
+    -- Service-specific IDs
+    google_user_id VARCHAR(255),
+    google_email VARCHAR(255),
+    
+    -- Permissions
+    scopes TEXT[],
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    last_sync_at TIMESTAMP,
+    sync_status VARCHAR(50),
+    error_message TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(user_id, service)
+);
+
+-- Google Drive integration
+CREATE TABLE google_drive_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    google_file_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- File metadata
+    name VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(200),
+    size_bytes BIGINT,
+    
+    -- Location
+    parent_folder_id VARCHAR(255),
+    path TEXT,
+    
+    -- URLs
+    web_view_link TEXT,
+    web_content_link TEXT,
+    thumbnail_link TEXT,
+    
+    -- Permissions
+    owner_email VARCHAR(255),
+    shared_with JSONB DEFAULT '[]',
+    permissions JSONB DEFAULT '{}',
+    
+    -- Academic context
+    course_id UUID,
+    assignment_id UUID,
+    
+    -- Sync status
+    last_modified TIMESTAMP,
+    last_synced TIMESTAMP,
+    
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Google Sheets integration
+CREATE TABLE google_sheets_data (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    spreadsheet_id VARCHAR(255) NOT NULL,
+    sheet_name VARCHAR(255) NOT NULL,
+    
+    -- Data cache
+    data_snapshot JSONB,
+    formulas JSONB DEFAULT '{}',
+    formatting JSONB DEFAULT '{}',
+    
+    -- Range tracking
+    last_edited_range VARCHAR(50),
+    
+    -- Academic use
+    purpose VARCHAR(100), -- 'gradebook', 'attendance', 'analytics', etc.
+    linked_course_id UUID,
+    
+    -- Sync
+    last_synced TIMESTAMP,
+    auto_sync_enabled BOOLEAN DEFAULT FALSE,
+    sync_frequency_minutes INTEGER DEFAULT 60,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(user_id, spreadsheet_id, sheet_name)
+);
+
+-- Google Calendar integration
+CREATE TABLE google_calendar_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    google_event_id VARCHAR(255) UNIQUE NOT NULL,
+    calendar_id VARCHAR(255) NOT NULL,
+    
+    -- Event details
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
+    location TEXT,
+    
+    -- Time
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+    all_day BOOLEAN DEFAULT FALSE,
+    timezone VARCHAR(50),
+    
+    -- Recurrence
+    recurrence_rule TEXT,
+    recurring_event_id VARCHAR(255),
+    
+    -- Attendees
+    organizer_email VARCHAR(255),
+    attendees JSONB DEFAULT '[]',
+    
+    -- Academic context
+    event_type VARCHAR(50), -- 'class', 'meeting', 'office_hours', 'exam', etc.
+    course_id UUID,
+    
+    -- Meeting info
+    meet_link TEXT,
+    
+    -- Status
+    status VARCHAR(50),
+    
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Google Docs integration
+CREATE TABLE google_docs_content (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    document_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Document info
+    title VARCHAR(500) NOT NULL,
+    
+    -- Content cache
+    content_text TEXT,
+    content_html TEXT,
+    outline JSONB DEFAULT '{}',
+    
+    -- Collaboration
+    last_editor_email VARCHAR(255),
+    revision_id VARCHAR(100),
+    comments JSONB DEFAULT '[]',
+    suggestions JSONB DEFAULT '[]',
+    
+    -- Academic use
+    document_type VARCHAR(50), -- 'syllabus', 'lesson_plan', 'assignment', etc.
+    course_id UUID,
+    
+    -- AI enhancement tracking
+    ai_suggestions_applied JSONB DEFAULT '[]',
+    
+    last_synced TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Google Slides integration
+CREATE TABLE google_slides_presentations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    presentation_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Presentation info
+    title VARCHAR(500) NOT NULL,
+    slide_count INTEGER,
+    
+    -- Slides data
+    slides JSONB DEFAULT '[]', -- Array of slide metadata
+    
+    -- Templates
+    template_used VARCHAR(100),
+    theme JSONB DEFAULT '{}',
+    
+    -- Academic use
+    presentation_type VARCHAR(50), -- 'lecture', 'student_project', etc.
+    course_id UUID,
+    lesson_id UUID,
+    
+    -- AI features used
+    ai_generated_slides JSONB DEFAULT '[]',
+    
+    last_synced TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Google Forms integration
+CREATE TABLE google_forms_data (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    form_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Form metadata
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
+    
+    -- Questions
+    questions JSONB NOT NULL DEFAULT '[]',
+    
+    -- Responses
+    response_count INTEGER DEFAULT 0,
+    responses_spreadsheet_id VARCHAR(255),
+    
+    -- Academic use
+    form_type VARCHAR(50), -- 'quiz', 'survey', 'feedback', etc.
+    course_id UUID,
+    assignment_id UUID,
+    
+    -- Settings
+    accepting_responses BOOLEAN DEFAULT TRUE,
+    require_sign_in BOOLEAN DEFAULT TRUE,
+    collect_email BOOLEAN DEFAULT TRUE,
+    
+    last_synced TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Gmail integration
+CREATE TABLE gmail_contexts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Email templates
+    templates JSONB DEFAULT '[]',
+    
+    -- Labels for academic organization
+    academic_labels JSONB DEFAULT '{}',
+    
+    -- Auto-responses
+    auto_response_rules JSONB DEFAULT '[]',
+    
+    -- Draft management
+    draft_count INTEGER DEFAULT 0,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Google Classroom integration
+CREATE TABLE google_classroom_courses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    classroom_course_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Course info
+    name VARCHAR(255) NOT NULL,
+    section VARCHAR(100),
+    description TEXT,
+    room VARCHAR(100),
+    
+    -- Enrollment
+    enrollment_code VARCHAR(20),
+    course_state VARCHAR(50),
+    
+    -- Links
+    alternate_link TEXT,
+    
+    -- Local mapping
+    local_course_id UUID,
+    
+    -- Sync status
+    last_synced TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- ACADEMIC STRUCTURE (ENHANCED)
+-- =====================================================
+
+-- Institutions
 CREATE TABLE institutions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     short_name VARCHAR(50),
     type VARCHAR(50) CHECK (type IN ('university', 'college', 'school', 'institute')),
+    
+    -- Details
     logo_url TEXT,
     website VARCHAR(255),
+    primary_color VARCHAR(7),
+    secondary_color VARCHAR(7),
+    
+    -- Contact
     email_domain VARCHAR(255),
-    address JSONB,
-    phone VARCHAR(20),
-    accreditation_info JSONB,
-    settings JSONB DEFAULT '{}',
+    main_phone VARCHAR(20),
+    address JSONB DEFAULT '{}',
+    
+    -- Settings
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    academic_year_start VARCHAR(5), -- MM-DD format
+    grading_scale JSONB DEFAULT '{}',
+    
+    -- Features
     features_enabled JSONB DEFAULT '{}',
+    google_workspace_domain VARCHAR(255),
+    
+    -- Subscription
     subscription_tier VARCHAR(50) DEFAULT 'basic',
-    api_limits JSONB DEFAULT '{}',
+    subscription_expires_at TIMESTAMP,
+    
+    -- AI settings
+    ai_budget_daily DECIMAL(10,2) DEFAULT 5.00,
+    ai_budget_monthly DECIMAL(10,2) DEFAULT 150.00,
+    
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -112,199 +673,328 @@ CREATE TABLE institutions (
 
 -- Departments
 CREATE TABLE departments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(50) NOT NULL,
     description TEXT,
+    
+    -- Leadership
     head_user_id UUID REFERENCES users(id),
+    assistant_head_ids UUID[],
+    
+    -- Hierarchy
     parent_department_id UUID REFERENCES departments(id),
+    
+    -- Resources
     budget_allocation DECIMAL(12, 2),
-    contact_email VARCHAR(255),
-    contact_phone VARCHAR(20),
-    location JSONB,
-    metadata JSONB DEFAULT '{}',
+    
+    -- Contact
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    office_location JSONB DEFAULT '{}',
+    office_hours JSONB DEFAULT '{}',
+    
+    -- Settings
+    settings JSONB DEFAULT '{}',
+    
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(institution_id, code)
 );
 
--- Academic years/semesters
+-- Academic periods
 CREATE TABLE academic_periods (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
-    type VARCHAR(50) CHECK (type IN ('year', 'semester', 'quarter', 'trimester', 'term')),
+    type VARCHAR(50) CHECK (type IN ('year', 'semester', 'quarter', 'trimester', 'term', 'summer')),
+    
+    -- Dates
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    
+    -- Important dates
     registration_start DATE,
     registration_end DATE,
     add_drop_deadline DATE,
     withdrawal_deadline DATE,
+    grade_submission_deadline DATE,
+    
+    -- Breaks
+    breaks JSONB DEFAULT '[]', -- Array of {name, start_date, end_date}
+    
     is_current BOOLEAN DEFAULT FALSE,
-    metadata JSONB DEFAULT '{}',
+    is_registration_open BOOLEAN DEFAULT FALSE,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Courses
 CREATE TABLE courses (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
     department_id UUID NOT NULL REFERENCES departments(id),
+    
+    -- Basic info
     code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    
+    -- Academic details
     credits INTEGER NOT NULL,
-    level VARCHAR(50) CHECK (level IN ('undergraduate', 'graduate', 'doctoral', 'certificate')),
+    contact_hours INTEGER,
+    level VARCHAR(50) CHECK (level IN ('undergraduate', 'graduate', 'doctoral', 'certificate', 'non-credit')),
+    
+    -- Prerequisites
     prerequisites JSONB DEFAULT '[]',
     corequisites JSONB DEFAULT '[]',
+    
+    -- Learning
     learning_objectives JSONB DEFAULT '[]',
-    syllabus_template TEXT,
+    competencies JSONB DEFAULT '[]',
+    
+    -- Resources
+    textbooks JSONB DEFAULT '[]',
+    materials JSONB DEFAULT '[]',
+    
+    -- Templates
+    syllabus_template_id UUID,
+    
+    -- Settings
     max_enrollment INTEGER,
     min_enrollment INTEGER,
-    delivery_mode VARCHAR(50) CHECK (delivery_mode IN ('in-person', 'online', 'hybrid', 'asynchronous')),
-    grading_scheme JSONB DEFAULT '{}',
-    metadata JSONB DEFAULT '{}',
+    waitlist_enabled BOOLEAN DEFAULT TRUE,
+    
+    -- AI features
+    ai_tools_enabled BOOLEAN DEFAULT TRUE,
+    ai_tool_whitelist UUID[],
+    
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(institution_id, code)
 );
 
--- Course sections (actual classes)
+-- Course sections
 CREATE TABLE course_sections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     academic_period_id UUID NOT NULL REFERENCES academic_periods(id),
     section_number VARCHAR(20) NOT NULL,
-    faculty_id UUID NOT NULL REFERENCES users(id),
-    assistant_faculty_ids UUID[] DEFAULT '{}',
-    schedule JSONB NOT NULL, -- Days, times, duration
-    location JSONB, -- Building, room, online URL
+    
+    -- Instructor
+    primary_instructor_id UUID NOT NULL REFERENCES users(id),
+    co_instructors UUID[] DEFAULT '{}',
+    teaching_assistants UUID[] DEFAULT '{}',
+    
+    -- Schedule
+    schedule JSONB NOT NULL, -- Array of {day, start_time, end_time, room}
+    
+    -- Location
+    delivery_mode VARCHAR(50) CHECK (delivery_mode IN ('in-person', 'online', 'hybrid', 'hyflex')),
+    room_id UUID,
+    online_meeting_url TEXT,
+    
+    -- Enrollment
     capacity INTEGER NOT NULL,
     enrolled_count INTEGER DEFAULT 0,
-    waitlist_capacity INTEGER DEFAULT 0,
+    waitlist_capacity INTEGER DEFAULT 10,
     waitlist_count INTEGER DEFAULT 0,
-    delivery_mode VARCHAR(50),
+    
+    -- Course materials
     syllabus_url TEXT,
-    materials JSONB DEFAULT '[]',
+    google_classroom_id VARCHAR(255),
+    
+    -- Settings
     settings JSONB DEFAULT '{}',
+    
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(course_id, academic_period_id, section_number)
 );
 
 -- Student enrollments
 CREATE TABLE enrollments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     student_id UUID NOT NULL REFERENCES users(id),
     course_section_id UUID NOT NULL REFERENCES course_sections(id),
-    enrollment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    enrollment_status VARCHAR(50) DEFAULT 'enrolled' CHECK (enrollment_status IN ('enrolled', 'waitlisted', 'dropped', 'withdrawn', 'completed', 'incomplete')),
-    grade VARCHAR(10),
-    grade_points DECIMAL(3, 2),
-    attendance_percentage DECIMAL(5, 2),
-    participation_score DECIMAL(5, 2),
-    mid_term_grade VARCHAR(10),
+    
+    -- Status
+    enrollment_status VARCHAR(50) DEFAULT 'enrolled' 
+        CHECK (enrollment_status IN ('enrolled', 'waitlisted', 'dropped', 'withdrawn', 'completed', 'incomplete', 'auditing')),
+    
+    -- Dates
+    enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status_changed_at TIMESTAMP,
+    
+    -- Grading
+    grading_basis VARCHAR(50) DEFAULT 'letter' CHECK (grading_basis IN ('letter', 'pass/fail', 'audit')),
+    midterm_grade VARCHAR(10),
     final_grade VARCHAR(10),
+    grade_points DECIMAL(3, 2),
     credits_earned DECIMAL(3, 1),
-    notes TEXT,
-    metadata JSONB DEFAULT '{}',
+    
+    -- Performance
+    attendance_rate DECIMAL(5, 2),
+    participation_score DECIMAL(5, 2),
+    
+    -- Notes
+    instructor_notes TEXT,
+    advisor_notes TEXT,
+    
+    -- Accommodations
+    accommodations JSONB DEFAULT '{}',
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(student_id, course_section_id)
 );
 
 -- =====================================================
--- AI TOOLS & FEATURES
+-- AI TOOLS & AGENTS (ENHANCED)
 -- =====================================================
 
 -- AI tools registry
 CREATE TABLE ai_tools (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL UNIQUE,
     display_name VARCHAR(200) NOT NULL,
-    category VARCHAR(50) NOT NULL,
-    subcategory VARCHAR(50),
     description TEXT,
-    icon VARCHAR(50),
-    roles_allowed VARCHAR[] DEFAULT '{}',
-    is_premium BOOLEAN DEFAULT FALSE,
-    base_cost_per_use DECIMAL(10, 4) DEFAULT 0,
-    average_tokens INTEGER,
-    model_preferences JSONB DEFAULT '{}',
-    input_schema JSONB NOT NULL,
-    output_schema JSONB,
-    examples JSONB DEFAULT '[]',
-    settings JSONB DEFAULT '{}',
-    usage_limits JSONB DEFAULT '{}',
+    category tool_category NOT NULL,
+    
+    -- Access
+    allowed_roles user_role[] NOT NULL,
+    requires_approval BOOLEAN DEFAULT FALSE,
+    
+    -- Implementation
+    implementation_type VARCHAR(50) DEFAULT 'langchain', -- 'langchain', 'custom', 'external_api'
+    endpoint_url TEXT,
+    
+    -- Configuration
+    default_model VARCHAR(50),
+    model_settings JSONB DEFAULT '{}',
+    
+    -- Prompts
+    system_prompt_template_id UUID REFERENCES prompt_templates(id),
+    user_prompt_template_id UUID REFERENCES prompt_templates(id),
+    
+    -- Cost
+    estimated_tokens_per_use INTEGER,
+    cost_per_use DECIMAL(10,6),
+    daily_limit_per_user INTEGER,
+    
+    -- Metadata
+    tags TEXT[],
+    documentation_url TEXT,
+    
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- AI tool usage tracking
-CREATE TABLE ai_tool_usage (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- AI agents (complex multi-tool workflows)
+CREATE TABLE ai_agents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL UNIQUE,
+    display_name VARCHAR(200) NOT NULL,
+    description TEXT,
+    
+    -- Configuration
+    agent_type VARCHAR(50) DEFAULT 'conversational', -- 'conversational', 'task', 'autonomous'
+    
+    -- Tools
+    available_tools UUID[] NOT NULL, -- References to ai_tools
+    tool_selection_strategy VARCHAR(50) DEFAULT 'auto', -- 'auto', 'manual', 'chain'
+    
+    -- Prompts
+    system_prompt_id UUID REFERENCES agent_prompts(id),
+    
+    -- Memory
+    memory_type memory_type DEFAULT 'conversation_buffer',
+    memory_config JSONB DEFAULT '{}',
+    
+    -- Behavior
+    max_iterations INTEGER DEFAULT 10,
+    early_stopping BOOLEAN DEFAULT TRUE,
+    
+    -- Access
+    allowed_roles user_role[] NOT NULL,
+    requires_approval BOOLEAN DEFAULT FALSE,
+    
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tool/Agent usage tracking
+CREATE TABLE ai_usage_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id),
-    tool_id UUID NOT NULL REFERENCES ai_tools(id),
-    session_id UUID,
-    input_tokens INTEGER,
-    output_tokens INTEGER,
-    total_tokens INTEGER,
-    model_used VARCHAR(100),
-    cost DECIMAL(10, 6),
+    
+    -- What was used
+    tool_id UUID REFERENCES ai_tools(id),
+    agent_id UUID REFERENCES ai_agents(id),
+    
+    -- Execution details
+    conversation_id UUID REFERENCES conversations(id),
+    input_data JSONB NOT NULL,
+    output_data JSONB,
+    
+    -- Performance
     execution_time_ms INTEGER,
+    total_tokens INTEGER,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    
+    -- Cost
+    model_used VARCHAR(50),
+    cost DECIMAL(10,6),
+    
+    -- Status
     status VARCHAR(50) DEFAULT 'success',
     error_message TEXT,
-    input_data JSONB,
-    output_data JSONB,
-    feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5),
-    feedback_text TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_ai_usage_user_id (user_id),
-    INDEX idx_ai_usage_created_at (created_at)
+    
+    -- Chain tracking (for multi-step processes)
+    parent_execution_id UUID REFERENCES ai_usage_logs(id),
+    execution_order INTEGER,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- AI cost tracking and budgets
+-- AI cost tracking
 CREATE TABLE ai_budgets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('system', 'institution', 'department', 'user')),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('user', 'department', 'institution')),
     entity_id UUID NOT NULL,
-    daily_limit DECIMAL(10, 2) DEFAULT 5.00,
-    monthly_limit DECIMAL(10, 2) DEFAULT 150.00,
-    current_daily_usage DECIMAL(10, 2) DEFAULT 0,
-    current_monthly_usage DECIMAL(10, 2) DEFAULT 0,
-    last_reset_daily DATE,
-    last_reset_monthly DATE,
-    alerts_enabled BOOLEAN DEFAULT TRUE,
-    alert_thresholds JSONB DEFAULT '{"daily": 0.8, "monthly": 0.8}',
+    
+    -- Limits
+    daily_limit DECIMAL(10,2) DEFAULT 5.00,
+    monthly_limit DECIMAL(10,2) DEFAULT 150.00,
+    
+    -- Current usage
+    daily_usage DECIMAL(10,2) DEFAULT 0.00,
+    monthly_usage DECIMAL(10,2) DEFAULT 0.00,
+    
+    -- Reset tracking
+    daily_reset_at DATE NOT NULL DEFAULT CURRENT_DATE,
+    monthly_reset_at DATE NOT NULL DEFAULT DATE_TRUNC('month', CURRENT_DATE)::DATE,
+    
+    -- Alerts
+    alert_at_percentage INTEGER DEFAULT 80,
+    alerts_sent JSONB DEFAULT '{}',
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(entity_type, entity_id)
-);
-
--- AI generated content storage
-CREATE TABLE ai_generated_content (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    tool_id UUID NOT NULL REFERENCES ai_tools(id),
-    usage_id UUID REFERENCES ai_tool_usage(id),
-    title VARCHAR(255),
-    content_type VARCHAR(50),
-    content TEXT,
-    metadata JSONB DEFAULT '{}',
-    is_favorite BOOLEAN DEFAULT FALSE,
-    is_public BOOLEAN DEFAULT FALSE,
-    share_token VARCHAR(100) UNIQUE,
-    tags VARCHAR[] DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_ai_content_user_id (user_id),
-    INDEX idx_ai_content_created_at (created_at)
 );
 
 -- =====================================================
@@ -313,301 +1003,367 @@ CREATE TABLE ai_generated_content (
 
 -- Assignments
 CREATE TABLE assignments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     course_section_id UUID NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+    
+    -- Basic info
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    type VARCHAR(50) CHECK (type IN ('homework', 'quiz', 'exam', 'project', 'paper', 'presentation', 'lab', 'discussion')),
     instructions TEXT,
-    attachments JSONB DEFAULT '[]',
-    total_points DECIMAL(6, 2) NOT NULL,
-    weight_percentage DECIMAL(5, 2),
-    due_date TIMESTAMP NOT NULL,
-    available_from TIMESTAMP,
-    late_submission_allowed BOOLEAN DEFAULT TRUE,
-    late_penalty JSONB DEFAULT '{}',
-    submission_types VARCHAR[] DEFAULT '{"file", "text"}',
-    max_attempts INTEGER DEFAULT 1,
-    time_limit_minutes INTEGER,
+    
+    -- Type and category
+    type VARCHAR(50) CHECK (type IN ('homework', 'quiz', 'exam', 'project', 'paper', 'presentation', 'lab', 'discussion', 'participation')),
+    category VARCHAR(100),
+    
+    -- Files
+    attachment_urls TEXT[],
+    resource_links JSONB DEFAULT '[]',
+    
+    -- Grading
+    points_possible DECIMAL(8,2) NOT NULL,
+    grading_type VARCHAR(50) DEFAULT 'points', -- 'points', 'percentage', 'letter', 'pass/fail'
+    weight DECIMAL(5,2), -- Percentage of final grade
+    
+    -- Rubric
     rubric_id UUID,
-    peer_review_enabled BOOLEAN DEFAULT FALSE,
-    peer_review_settings JSONB DEFAULT '{}',
-    group_assignment BOOLEAN DEFAULT FALSE,
-    group_settings JSONB DEFAULT '{}',
+    
+    -- Dates
+    available_from TIMESTAMP,
+    due_date TIMESTAMP NOT NULL,
+    lock_at TIMESTAMP,
+    
+    -- Submission settings
+    submission_types TEXT[] DEFAULT '{online_text,online_upload}',
+    allowed_file_extensions TEXT[],
+    max_file_size_mb INTEGER DEFAULT 50,
+    attempt_limit INTEGER DEFAULT 1,
+    
+    -- Late policy
+    accept_late BOOLEAN DEFAULT TRUE,
+    late_penalty_percent DECIMAL(5,2) DEFAULT 10,
+    late_penalty_interval VARCHAR(20) DEFAULT 'day', -- 'hour', 'day'
+    
+    -- Group work
+    is_group_assignment BOOLEAN DEFAULT FALSE,
+    group_category_id UUID,
+    
+    -- AI policy
     ai_tools_allowed BOOLEAN DEFAULT TRUE,
-    ai_usage_disclosure_required BOOLEAN DEFAULT TRUE,
-    metadata JSONB DEFAULT '{}',
+    ai_citation_required BOOLEAN DEFAULT TRUE,
+    turnitin_enabled BOOLEAN DEFAULT FALSE,
+    
+    -- Google integration
+    google_classroom_assignment_id VARCHAR(255),
+    
     status VARCHAR(50) DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Rubrics for grading
+-- Rubrics
 CREATE TABLE rubrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    
+    -- Ownership
     created_by UUID NOT NULL REFERENCES users(id),
+    institution_id UUID REFERENCES institutions(id),
+    
+    -- Sharing
     is_template BOOLEAN DEFAULT FALSE,
-    criteria JSONB NOT NULL, -- Array of criteria with levels and points
-    total_points DECIMAL(6, 2),
-    metadata JSONB DEFAULT '{}',
+    is_public BOOLEAN DEFAULT FALSE,
+    
+    -- Structure
+    criteria JSONB NOT NULL, -- Array of criteria with levels
+    points_possible DECIMAL(8,2),
+    
+    -- Usage
+    usage_count INTEGER DEFAULT 0,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Student submissions
 CREATE TABLE submissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     assignment_id UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES users(id),
+    
+    -- Group submission
     group_id UUID,
+    submitted_for_group BOOLEAN DEFAULT FALSE,
+    
+    -- Attempt tracking
     attempt_number INTEGER DEFAULT 1,
+    
+    -- Content
     submission_type VARCHAR(50) NOT NULL,
-    content TEXT,
-    file_attachments JSONB DEFAULT '[]',
+    text_content TEXT,
+    file_urls TEXT[],
+    url_submission TEXT,
+    
+    -- Google Drive integration
+    google_drive_file_ids TEXT[],
+    
+    -- Timestamps
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_late BOOLEAN DEFAULT FALSE,
-    late_days INTEGER DEFAULT 0,
-    ai_tools_used JSONB DEFAULT '[]',
-    ai_disclosure TEXT,
+    seconds_late INTEGER DEFAULT 0,
+    
+    -- AI usage disclosure
+    ai_tools_used TEXT[],
+    ai_usage_description TEXT,
+    
+    -- Status
     status VARCHAR(50) DEFAULT 'submitted' CHECK (status IN ('draft', 'submitted', 'grading', 'graded', 'returned')),
-    metadata JSONB DEFAULT '{}',
+    
+    -- Turnitin
+    turnitin_score DECIMAL(5,2),
+    turnitin_report_url TEXT,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(assignment_id, student_id, attempt_number)
 );
 
--- Grades and feedback
+-- Grades
 CREATE TABLE grades (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     grader_id UUID NOT NULL REFERENCES users(id),
-    points_earned DECIMAL(6, 2) NOT NULL,
-    percentage DECIMAL(5, 2),
+    
+    -- Score
+    points_earned DECIMAL(8,2),
+    percentage DECIMAL(5,2),
     letter_grade VARCHAR(10),
+    
+    -- Rubric scoring
+    rubric_id UUID REFERENCES rubrics(id),
     rubric_scores JSONB DEFAULT '{}',
-    feedback TEXT,
-    private_notes TEXT,
+    
+    -- Feedback
+    overall_feedback TEXT,
+    inline_feedback JSONB DEFAULT '{}', -- Feedback on specific parts
+    audio_feedback_url TEXT,
+    
+    -- Status
     is_final BOOLEAN DEFAULT FALSE,
-    graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    returned_at TIMESTAMP,
-    metadata JSONB DEFAULT '{}',
+    grade_posted_at TIMESTAMP,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =====================================================
--- COMMUNICATION SYSTEM
+-- COMMUNICATION & COLLABORATION
 -- =====================================================
 
--- Messages between users
+-- Messages
 CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    
+    -- Participants
     sender_id UUID NOT NULL REFERENCES users(id),
-    recipient_id UUID REFERENCES users(id),
-    recipient_group_id UUID,
+    recipient_ids UUID[] NOT NULL,
+    
+    -- Content
     subject VARCHAR(255),
     body TEXT NOT NULL,
-    attachments JSONB DEFAULT '[]',
-    is_read BOOLEAN DEFAULT FALSE,
-    read_at TIMESTAMP,
-    is_starred BOOLEAN DEFAULT FALSE,
-    is_archived BOOLEAN DEFAULT FALSE,
-    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-    category VARCHAR(50),
+    
+    -- Attachments
+    attachment_urls TEXT[],
+    
+    -- Threading
     thread_id UUID,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_messages_sender (sender_id),
-    INDEX idx_messages_recipient (recipient_id),
-    INDEX idx_messages_created_at (created_at)
+    reply_to_id UUID REFERENCES messages(id),
+    
+    -- Status
+    is_announcement BOOLEAN DEFAULT FALSE,
+    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+    
+    -- Read tracking
+    read_by JSONB DEFAULT '{}', -- {user_id: timestamp}
+    
+    -- Context
+    context_type VARCHAR(50), -- 'course', 'assignment', etc.
+    context_id UUID,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Announcements
 CREATE TABLE announcements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     author_id UUID NOT NULL REFERENCES users(id),
+    
+    -- Content
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
+    
+    -- Target audience
     audience_type VARCHAR(50) NOT NULL CHECK (audience_type IN ('all', 'institution', 'department', 'course', 'role')),
     audience_id UUID,
-    audience_roles VARCHAR[] DEFAULT '{}',
+    audience_roles user_role[],
+    
+    -- Display settings
     priority VARCHAR(20) DEFAULT 'normal',
-    publish_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expire_at TIMESTAMP,
-    attachments JSONB DEFAULT '[]',
-    acknowledgment_required BOOLEAN DEFAULT FALSE,
     is_pinned BOOLEAN DEFAULT FALSE,
-    metadata JSONB DEFAULT '{}',
+    show_until TIMESTAMP,
+    
+    -- Acknowledgment
+    requires_acknowledgment BOOLEAN DEFAULT FALSE,
+    acknowledged_by JSONB DEFAULT '{}', -- {user_id: timestamp}
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Notifications
-CREATE TABLE notifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    type VARCHAR(50) NOT NULL,
+-- Discussion forums
+CREATE TABLE discussion_forums (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_section_id UUID NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+    
+    -- Basic info
     title VARCHAR(255) NOT NULL,
-    message TEXT,
-    action_url TEXT,
-    action_data JSONB DEFAULT '{}',
-    is_read BOOLEAN DEFAULT FALSE,
-    read_at TIMESTAMP,
-    is_email_sent BOOLEAN DEFAULT FALSE,
-    is_sms_sent BOOLEAN DEFAULT FALSE,
-    is_push_sent BOOLEAN DEFAULT FALSE,
-    priority VARCHAR(20) DEFAULT 'normal',
-    expires_at TIMESTAMP,
-    metadata JSONB DEFAULT '{}',
+    description TEXT,
+    
+    -- Settings
+    is_announcement_only BOOLEAN DEFAULT FALSE,
+    require_initial_post BOOLEAN DEFAULT FALSE,
+    allow_anonymous BOOLEAN DEFAULT FALSE,
+    
+    -- Grading
+    is_graded BOOLEAN DEFAULT FALSE,
+    points_possible DECIMAL(8,2),
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_notifications_user_id (user_id),
-    INDEX idx_notifications_created_at (created_at)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Parent/Guardian access
-CREATE TABLE parent_guardian_access (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID NOT NULL REFERENCES users(id),
-    parent_email VARCHAR(255) NOT NULL,
-    parent_name VARCHAR(200) NOT NULL,
-    relationship VARCHAR(50),
-    access_token VARCHAR(255) UNIQUE,
-    access_level VARCHAR(50) DEFAULT 'view_only',
-    permissions JSONB DEFAULT '{}',
-    is_active BOOLEAN DEFAULT TRUE,
-    last_access_at TIMESTAMP,
+-- Discussion posts
+CREATE TABLE discussion_posts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    forum_id UUID NOT NULL REFERENCES discussion_forums(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES users(id),
+    
+    -- Threading
+    parent_post_id UUID REFERENCES discussion_posts(id),
+    thread_id UUID,
+    
+    -- Content
+    title VARCHAR(255),
+    content TEXT NOT NULL,
+    
+    -- Anonymous posting
+    is_anonymous BOOLEAN DEFAULT FALSE,
+    
+    -- Reactions
+    likes INTEGER DEFAULT 0,
+    liked_by UUID[] DEFAULT '{}',
+    
+    -- AI enhancement
+    ai_suggested_responses JSONB DEFAULT '[]',
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(student_id, parent_email)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =====================================================
 -- ANALYTICS & REPORTING
 -- =====================================================
 
--- Performance metrics
-CREATE TABLE performance_metrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_type VARCHAR(50) NOT NULL,
-    entity_id UUID NOT NULL,
-    metric_type VARCHAR(100) NOT NULL,
-    period_type VARCHAR(20) CHECK (period_type IN ('daily', 'weekly', 'monthly', 'semester', 'yearly')),
-    period_start DATE NOT NULL,
-    period_end DATE NOT NULL,
-    value DECIMAL(12, 4) NOT NULL,
-    previous_value DECIMAL(12, 4),
-    change_percentage DECIMAL(6, 2),
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_metrics_entity (entity_type, entity_id),
-    INDEX idx_metrics_period (period_start, period_end)
+-- Learning analytics events
+CREATE TABLE learning_analytics_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    
+    -- Event details
+    event_type VARCHAR(100) NOT NULL,
+    event_category VARCHAR(50),
+    
+    -- Context
+    course_id UUID,
+    assignment_id UUID,
+    resource_id UUID,
+    
+    -- Data
+    event_data JSONB DEFAULT '{}',
+    
+    -- Time tracking
+    duration_seconds INTEGER,
+    
+    -- Device/platform
+    platform VARCHAR(50),
+    device_type VARCHAR(50),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- System health monitoring
-CREATE TABLE system_health_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    service_name VARCHAR(100) NOT NULL,
-    status VARCHAR(20) CHECK (status IN ('healthy', 'degraded', 'down')),
-    response_time_ms INTEGER,
-    error_rate DECIMAL(5, 2),
-    cpu_usage DECIMAL(5, 2),
-    memory_usage DECIMAL(5, 2),
-    active_connections INTEGER,
-    metadata JSONB DEFAULT '{}',
+-- Performance metrics
+CREATE TABLE performance_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    
+    -- Entity
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id UUID NOT NULL,
+    
+    -- Metric
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value DECIMAL(12,4) NOT NULL,
+    
+    -- Time period
+    period_type VARCHAR(20) NOT NULL CHECK (period_type IN ('daily', 'weekly', 'monthly', 'semester')),
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    
+    -- Comparison
+    previous_value DECIMAL(12,4),
+    target_value DECIMAL(12,4),
+    
+    -- Metadata
+    breakdown JSONB DEFAULT '{}',
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_health_created_at (created_at)
+    
+    UNIQUE(entity_type, entity_id, metric_name, period_type, period_start)
 );
 
 -- Custom reports
 CREATE TABLE reports (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    
+    -- Ownership
     created_by UUID NOT NULL REFERENCES users(id),
+    institution_id UUID REFERENCES institutions(id),
+    
+    -- Configuration
     report_type VARCHAR(50) NOT NULL,
-    query_definition JSONB NOT NULL,
-    visualization_config JSONB DEFAULT '{}',
-    schedule JSONB DEFAULT '{}',
+    data_source VARCHAR(100) NOT NULL,
+    filters JSONB DEFAULT '{}',
+    columns JSONB DEFAULT '[]',
+    
+    -- Visualization
+    chart_type VARCHAR(50),
+    chart_config JSONB DEFAULT '{}',
+    
+    -- Scheduling
+    is_scheduled BOOLEAN DEFAULT FALSE,
+    schedule_config JSONB DEFAULT '{}',
     recipients UUID[] DEFAULT '{}',
+    
+    -- Sharing
     is_public BOOLEAN DEFAULT FALSE,
+    shared_with_roles user_role[],
+    
+    -- Execution
     last_run_at TIMESTAMP,
-    next_run_at TIMESTAMP,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- =====================================================
--- RESOURCE MANAGEMENT
--- =====================================================
-
--- Physical resources (rooms, equipment)
-CREATE TABLE resources (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    institution_id UUID NOT NULL REFERENCES institutions(id),
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(50) CHECK (type IN ('room', 'equipment', 'vehicle', 'facility', 'software')),
-    category VARCHAR(100),
-    description TEXT,
-    capacity INTEGER,
-    location JSONB,
-    features JSONB DEFAULT '[]',
-    availability_schedule JSONB DEFAULT '{}',
-    booking_rules JSONB DEFAULT '{}',
-    maintenance_schedule JSONB DEFAULT '{}',
-    images JSONB DEFAULT '[]',
-    status VARCHAR(50) DEFAULT 'available',
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Resource bookings
-CREATE TABLE resource_bookings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    resource_id UUID NOT NULL REFERENCES resources(id),
-    booked_by UUID NOT NULL REFERENCES users(id),
-    booked_for UUID REFERENCES users(id),
-    purpose VARCHAR(255) NOT NULL,
-    description TEXT,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
-    attendees INTEGER,
-    recurring_pattern JSONB DEFAULT '{}',
-    approval_status VARCHAR(50) DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected', 'cancelled')),
-    approved_by UUID REFERENCES users(id),
-    approved_at TIMESTAMP,
-    cancellation_reason TEXT,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Digital learning resources
-CREATE TABLE learning_resources (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    type VARCHAR(50) CHECK (type IN ('document', 'video', 'audio', 'interactive', 'link', 'ebook')),
-    subject_area VARCHAR(100),
-    grade_level VARCHAR[] DEFAULT '{}',
-    url TEXT,
-    file_path TEXT,
-    file_size BIGINT,
-    duration_seconds INTEGER,
-    author VARCHAR(255),
-    publisher VARCHAR(255),
-    isbn VARCHAR(20),
-    tags VARCHAR[] DEFAULT '{}',
-    usage_count INTEGER DEFAULT 0,
-    rating DECIMAL(3, 2),
-    rating_count INTEGER DEFAULT 0,
-    license_type VARCHAR(100),
-    access_restrictions JSONB DEFAULT '{}',
-    metadata JSONB DEFAULT '{}',
-    created_by UUID REFERENCES users(id),
+    last_run_by UUID REFERENCES users(id),
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -618,297 +1374,215 @@ CREATE TABLE learning_resources (
 
 -- Workflow templates
 CREATE TABLE workflow_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
     category VARCHAR(100),
-    trigger_type VARCHAR(50) CHECK (trigger_type IN ('manual', 'scheduled', 'event', 'webhook')),
+    
+    -- Trigger
+    trigger_type VARCHAR(50) NOT NULL CHECK (trigger_type IN ('manual', 'scheduled', 'event', 'webhook')),
     trigger_config JSONB NOT NULL,
-    steps JSONB NOT NULL, -- Array of workflow steps
-    variables JSONB DEFAULT '{}',
-    permissions_required VARCHAR[] DEFAULT '{}',
+    
+    -- Steps
+    workflow_definition JSONB NOT NULL, -- Workflow steps in JSON format
+    
+    -- Variables
+    input_variables JSONB DEFAULT '[]',
+    
+    -- Access
+    allowed_roles user_role[] DEFAULT '{}',
+    requires_approval BOOLEAN DEFAULT FALSE,
+    
+    -- Usage
     is_active BOOLEAN DEFAULT TRUE,
-    is_system BOOLEAN DEFAULT FALSE,
+    usage_count INTEGER DEFAULT 0,
+    
     created_by UUID REFERENCES users(id),
-    metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Workflow instances
-CREATE TABLE workflow_instances (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- Workflow executions
+CREATE TABLE workflow_executions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     template_id UUID NOT NULL REFERENCES workflow_templates(id),
     triggered_by UUID REFERENCES users(id),
-    trigger_data JSONB DEFAULT '{}',
+    
+    -- Input
+    input_data JSONB DEFAULT '{}',
+    
+    -- Execution
+    status VARCHAR(50) DEFAULT 'running' CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled')),
     current_step INTEGER DEFAULT 0,
-    status VARCHAR(50) DEFAULT 'running' CHECK (status IN ('running', 'paused', 'completed', 'failed', 'cancelled')),
-    variables JSONB DEFAULT '{}',
-    execution_log JSONB DEFAULT '[]',
+    
+    -- State
+    workflow_state JSONB DEFAULT '{}',
+    step_results JSONB DEFAULT '[]',
+    
+    -- Error handling
     error_message TEXT,
+    error_step INTEGER,
+    
+    -- Timing
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
-    metadata JSONB DEFAULT '{}',
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Task management
-CREATE TABLE tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================
+-- RESOURCE MANAGEMENT
+-- =====================================================
+
+-- Physical resources
+CREATE TABLE resources (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    institution_id UUID NOT NULL REFERENCES institutions(id),
+    
+    -- Basic info
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) CHECK (type IN ('room', 'equipment', 'vehicle', 'software_license')),
+    
+    -- Details
+    description TEXT,
+    capacity INTEGER,
+    features JSONB DEFAULT '[]',
+    
+    -- Location
+    building VARCHAR(100),
+    floor VARCHAR(20),
+    room_number VARCHAR(50),
+    
+    -- Availability
+    available_hours JSONB DEFAULT '{}',
+    requires_approval BOOLEAN DEFAULT FALSE,
+    approval_roles user_role[] DEFAULT '{}',
+    
+    -- Maintenance
+    maintenance_schedule JSONB DEFAULT '{}',
+    
+    status VARCHAR(50) DEFAULT 'available',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Resource bookings
+CREATE TABLE resource_bookings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    resource_id UUID NOT NULL REFERENCES resources(id),
+    booked_by UUID NOT NULL REFERENCES users(id),
+    
+    -- Booking details
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    assigned_to UUID REFERENCES users(id),
-    assigned_by UUID REFERENCES users(id),
-    department_id UUID REFERENCES departments(id),
-    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-    category VARCHAR(100),
-    due_date TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'review', 'completed', 'cancelled')),
-    completion_percentage INTEGER DEFAULT 0,
-    estimated_hours DECIMAL(5, 2),
-    actual_hours DECIMAL(5, 2),
-    parent_task_id UUID REFERENCES tasks(id),
-    workflow_instance_id UUID REFERENCES workflow_instances(id),
-    attachments JSONB DEFAULT '[]',
-    comments_count INTEGER DEFAULT 0,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP
-);
-
--- =====================================================
--- ATTENDANCE & SCHEDULING
--- =====================================================
-
--- Class schedules
-CREATE TABLE class_schedules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_section_id UUID NOT NULL REFERENCES course_sections(id),
-    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
-    start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
-    room_id UUID REFERENCES resources(id),
-    online_meeting_url TEXT,
-    is_recurring BOOLEAN DEFAULT TRUE,
-    exceptions JSONB DEFAULT '[]', -- Date-specific changes
-    metadata JSONB DEFAULT '{}',
+    
+    -- Time
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+    
+    -- Recurrence
+    is_recurring BOOLEAN DEFAULT FALSE,
+    recurrence_rule TEXT,
+    recurrence_end DATE,
+    
+    -- Participants
+    attendee_count INTEGER,
+    attendee_ids UUID[] DEFAULT '{}',
+    
+    -- Approval
+    status VARCHAR(50) DEFAULT 'confirmed' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed')),
+    approved_by UUID REFERENCES users(id),
+    approved_at TIMESTAMP,
+    
+    -- Context
+    course_section_id UUID REFERENCES course_sections(id),
+    event_type VARCHAR(50),
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =====================================================
+-- ATTENDANCE TRACKING
+-- =====================================================
 
 -- Attendance records
 CREATE TABLE attendance_records (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     course_section_id UUID NOT NULL REFERENCES course_sections(id),
     student_id UUID NOT NULL REFERENCES users(id),
     class_date DATE NOT NULL,
+    
+    -- Status
     status VARCHAR(20) CHECK (status IN ('present', 'absent', 'late', 'excused', 'remote')),
+    
+    -- Time tracking
     check_in_time TIMESTAMP,
     check_out_time TIMESTAMP,
-    duration_minutes INTEGER,
-    notes TEXT,
-    excused_by UUID REFERENCES users(id),
-    excused_reason TEXT,
-    metadata JSONB DEFAULT '{}',
+    minutes_late INTEGER DEFAULT 0,
+    
+    -- Location
+    check_in_method VARCHAR(50), -- 'manual', 'qr_code', 'geolocation', 'zoom'
+    location_verified BOOLEAN DEFAULT FALSE,
+    
+    -- Notes
+    instructor_notes TEXT,
+    excuse_reason TEXT,
+    excuse_documentation_url TEXT,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     UNIQUE(course_section_id, student_id, class_date)
-);
-
--- =====================================================
--- GOOGLE WORKSPACE INTEGRATION
--- =====================================================
-
--- Google workspace connections
-CREATE TABLE google_workspace_connections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    google_email VARCHAR(255) NOT NULL,
-    access_token TEXT,
-    refresh_token TEXT,
-    token_expires_at TIMESTAMP,
-    scopes TEXT[] DEFAULT '{}',
-    drive_enabled BOOLEAN DEFAULT FALSE,
-    calendar_enabled BOOLEAN DEFAULT FALSE,
-    gmail_enabled BOOLEAN DEFAULT FALSE,
-    classroom_enabled BOOLEAN DEFAULT FALSE,
-    last_sync_at TIMESTAMP,
-    sync_status VARCHAR(50) DEFAULT 'active',
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, google_email)
-);
-
--- Google drive files
-CREATE TABLE google_drive_files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    google_file_id VARCHAR(255) NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    file_type VARCHAR(100),
-    mime_type VARCHAR(100),
-    file_size BIGINT,
-    parent_folder_id VARCHAR(255),
-    web_view_link TEXT,
-    download_link TEXT,
-    thumbnail_link TEXT,
-    shared_with JSONB DEFAULT '[]',
-    permissions JSONB DEFAULT '{}',
-    course_section_id UUID REFERENCES course_sections(id),
-    assignment_id UUID REFERENCES assignments(id),
-    last_modified_at TIMESTAMP,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, google_file_id)
 );
 
 -- =====================================================
 -- SECURITY & COMPLIANCE
 -- =====================================================
 
--- Audit logs (FERPA compliance)
+-- Audit logs
 CREATE TABLE audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id),
+    
+    -- Action
     action VARCHAR(100) NOT NULL,
     resource_type VARCHAR(100) NOT NULL,
     resource_id UUID,
-    resource_data JSONB DEFAULT '{}',
+    
+    -- Details
     changes JSONB DEFAULT '{}',
+    
+    -- Request info
     ip_address INET,
     user_agent TEXT,
-    session_id UUID,
-    compliance_flags VARCHAR[] DEFAULT '{}',
-    risk_score INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_audit_user_id (user_id),
-    INDEX idx_audit_resource (resource_type, resource_id),
-    INDEX idx_audit_created_at (created_at)
+    
+    -- Compliance
+    compliance_tags TEXT[] DEFAULT '{}',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Data access logs
-CREATE TABLE data_access_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- Data privacy consents
+CREATE TABLE privacy_consents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id),
-    accessed_user_id UUID REFERENCES users(id),
-    data_type VARCHAR(100) NOT NULL,
-    access_reason TEXT,
-    fields_accessed VARCHAR[] DEFAULT '{}',
+    
+    -- Consent details
+    consent_type VARCHAR(100) NOT NULL,
+    consent_version VARCHAR(20) NOT NULL,
+    
+    -- Status
+    consented BOOLEAN NOT NULL,
+    
+    -- Metadata
     ip_address INET,
+    user_agent TEXT,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_data_access_user (user_id),
-    INDEX idx_data_access_target (accessed_user_id),
-    INDEX idx_data_access_created (created_at)
-);
-
--- Security incidents
-CREATE TABLE security_incidents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    incident_type VARCHAR(100) NOT NULL,
-    severity VARCHAR(20) CHECK (severity IN ('low', 'medium', 'high', 'critical')),
-    description TEXT NOT NULL,
-    affected_users UUID[] DEFAULT '{}',
-    affected_resources JSONB DEFAULT '{}',
-    detection_method VARCHAR(100),
-    response_actions JSONB DEFAULT '[]',
-    status VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'investigating', 'contained', 'resolved', 'closed')),
-    reported_by UUID REFERENCES users(id),
-    assigned_to UUID REFERENCES users(id),
-    resolution_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
-);
-
--- =====================================================
--- FUTURE EXTENSIBILITY
--- =====================================================
-
--- Feature flags
-CREATE TABLE feature_flags (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
-    is_enabled BOOLEAN DEFAULT FALSE,
-    rollout_percentage INTEGER DEFAULT 0 CHECK (rollout_percentage BETWEEN 0 AND 100),
-    enabled_for_roles VARCHAR[] DEFAULT '{}',
-    enabled_for_users UUID[] DEFAULT '{}',
-    enabled_for_institutions UUID[] DEFAULT '{}',
-    configuration JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Plugin system
-CREATE TABLE plugins (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    display_name VARCHAR(200) NOT NULL,
-    version VARCHAR(20) NOT NULL,
-    description TEXT,
-    author VARCHAR(200),
-    website VARCHAR(255),
-    category VARCHAR(50),
-    is_active BOOLEAN DEFAULT FALSE,
-    permissions_required VARCHAR[] DEFAULT '{}',
-    configuration_schema JSONB DEFAULT '{}',
-    configuration JSONB DEFAULT '{}',
-    endpoints JSONB DEFAULT '{}',
-    hooks JSONB DEFAULT '{}',
-    dependencies JSONB DEFAULT '{}',
-    installed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Custom fields for extensibility
-CREATE TABLE custom_fields (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_type VARCHAR(100) NOT NULL,
-    field_name VARCHAR(100) NOT NULL,
-    field_type VARCHAR(50) NOT NULL,
-    display_name VARCHAR(200) NOT NULL,
-    description TEXT,
-    is_required BOOLEAN DEFAULT FALSE,
-    default_value TEXT,
-    validation_rules JSONB DEFAULT '{}',
-    options JSONB DEFAULT '{}',
-    position INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(entity_type, field_name)
-);
-
--- Custom field values
-CREATE TABLE custom_field_values (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    custom_field_id UUID NOT NULL REFERENCES custom_fields(id),
-    entity_id UUID NOT NULL,
-    value TEXT,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(custom_field_id, entity_id)
-);
-
--- System configuration
-CREATE TABLE system_config (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key VARCHAR(255) NOT NULL UNIQUE,
-    value TEXT NOT NULL,
-    value_type VARCHAR(50) DEFAULT 'string',
-    category VARCHAR(100),
-    description TEXT,
-    is_sensitive BOOLEAN DEFAULT FALSE,
-    is_editable BOOLEAN DEFAULT TRUE,
-    validation_rules JSONB DEFAULT '{}',
-    updated_by UUID REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
+    UNIQUE(user_id, consent_type)
 );
 
 -- =====================================================
@@ -917,25 +1591,44 @@ CREATE TABLE system_config (
 
 -- User indexes
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_institution ON users(institution_id);
 CREATE INDEX idx_users_status ON users(status);
-CREATE INDEX idx_users_institution ON users((metadata->>'institution_id'));
 
--- Course and enrollment indexes
+-- Authentication indexes
+CREATE INDEX idx_sessions_user ON user_sessions(user_id);
+CREATE INDEX idx_sessions_token ON user_sessions(session_token);
+CREATE INDEX idx_sessions_expires ON user_sessions(expires_at);
+
+-- Conversation indexes
+CREATE INDEX idx_conversations_user ON conversations(user_id);
+CREATE INDEX idx_messages_conversation ON conversation_messages(conversation_id);
+CREATE INDEX idx_messages_sequence ON conversation_messages(conversation_id, sequence_number);
+CREATE INDEX idx_embeddings_conversation ON conversation_embeddings(conversation_id);
+
+-- Google Workspace indexes
+CREATE INDEX idx_google_connections_user ON google_workspace_connections(user_id);
+CREATE INDEX idx_google_drive_user ON google_drive_files(user_id);
+CREATE INDEX idx_google_drive_file ON google_drive_files(google_file_id);
+CREATE INDEX idx_google_calendar_user ON google_calendar_events(user_id);
+CREATE INDEX idx_google_calendar_event ON google_calendar_events(google_event_id);
+
+-- Academic indexes
 CREATE INDEX idx_courses_dept ON courses(department_id);
 CREATE INDEX idx_sections_course ON course_sections(course_id);
-CREATE INDEX idx_sections_faculty ON course_sections(faculty_id);
 CREATE INDEX idx_sections_period ON course_sections(academic_period_id);
+CREATE INDEX idx_sections_instructor ON course_sections(primary_instructor_id);
 CREATE INDEX idx_enrollments_student ON enrollments(student_id);
 CREATE INDEX idx_enrollments_section ON enrollments(course_section_id);
-CREATE INDEX idx_enrollments_status ON enrollments(enrollment_status);
 
 -- AI usage indexes
-CREATE INDEX idx_ai_usage_tool ON ai_tool_usage(tool_id);
-CREATE INDEX idx_ai_usage_cost ON ai_tool_usage(cost);
+CREATE INDEX idx_ai_usage_user ON ai_usage_logs(user_id);
+CREATE INDEX idx_ai_usage_created ON ai_usage_logs(created_at);
+CREATE INDEX idx_ai_usage_conversation ON ai_usage_logs(conversation_id);
 CREATE INDEX idx_ai_budgets_entity ON ai_budgets(entity_type, entity_id);
 
--- Assignment and grade indexes
+-- Assignment indexes
 CREATE INDEX idx_assignments_section ON assignments(course_section_id);
 CREATE INDEX idx_assignments_due ON assignments(due_date);
 CREATE INDEX idx_submissions_assignment ON submissions(assignment_id);
@@ -943,17 +1636,26 @@ CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_grades_submission ON grades(submission_id);
 
 -- Communication indexes
+CREATE INDEX idx_messages_sender ON messages(sender_id);
+CREATE INDEX idx_messages_thread ON messages(thread_id);
 CREATE INDEX idx_announcements_audience ON announcements(audience_type, audience_id);
-CREATE INDEX idx_announcements_publish ON announcements(publish_at);
 
--- Performance and analytics indexes
-CREATE INDEX idx_metrics_type ON performance_metrics(metric_type);
-CREATE INDEX idx_health_service ON system_health_logs(service_name);
+-- Analytics indexes
+CREATE INDEX idx_analytics_events_user ON learning_analytics_events(user_id);
+CREATE INDEX idx_analytics_events_created ON learning_analytics_events(created_at);
+CREATE INDEX idx_metrics_entity ON performance_metrics(entity_type, entity_id);
+CREATE INDEX idx_metrics_period ON performance_metrics(period_start, period_end);
+
+-- Audit indexes
+CREATE INDEX idx_audit_user ON audit_logs(user_id);
+CREATE INDEX idx_audit_resource ON audit_logs(resource_type, resource_id);
+CREATE INDEX idx_audit_created ON audit_logs(created_at);
 
 -- =====================================================
--- TRIGGERS FOR UPDATED_AT
+-- TRIGGERS
 -- =====================================================
 
+-- Update timestamp trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -962,7 +1664,7 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Apply trigger to all tables with updated_at
+-- Apply update trigger to all tables with updated_at
 DO $$
 DECLARE
     t text;
@@ -973,105 +1675,180 @@ BEGIN
         WHERE column_name = 'updated_at' 
         AND table_schema = 'public'
     LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS update_%I_updated_at ON %I', t, t);
         EXECUTE format('CREATE TRIGGER update_%I_updated_at BEFORE UPDATE ON %I 
                        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()', t, t);
     END LOOP;
 END $$;
 
+-- Enrollment count trigger
+CREATE OR REPLACE FUNCTION update_enrollment_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.enrollment_status = 'enrolled' THEN
+        UPDATE course_sections 
+        SET enrolled_count = enrolled_count + 1 
+        WHERE id = NEW.course_section_id;
+    ELSIF TG_OP = 'UPDATE' AND OLD.enrollment_status = 'enrolled' AND NEW.enrollment_status != 'enrolled' THEN
+        UPDATE course_sections 
+        SET enrolled_count = enrolled_count - 1 
+        WHERE id = NEW.course_section_id;
+    ELSIF TG_OP = 'UPDATE' AND OLD.enrollment_status != 'enrolled' AND NEW.enrollment_status = 'enrolled' THEN
+        UPDATE course_sections 
+        SET enrolled_count = enrolled_count + 1 
+        WHERE id = NEW.course_section_id;
+    ELSIF TG_OP = 'DELETE' AND OLD.enrollment_status = 'enrolled' THEN
+        UPDATE course_sections 
+        SET enrolled_count = enrolled_count - 1 
+        WHERE id = OLD.course_section_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_enrollment_count_trigger
+AFTER INSERT OR UPDATE OR DELETE ON enrollments
+FOR EACH ROW EXECUTE FUNCTION update_enrollment_count();
+
+-- AI budget tracking trigger
+CREATE OR REPLACE FUNCTION track_ai_budget()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_daily_usage DECIMAL(10,2);
+    current_monthly_usage DECIMAL(10,2);
+    budget_record ai_budgets%ROWTYPE;
+BEGIN
+    -- Get or create budget record for user
+    SELECT * INTO budget_record 
+    FROM ai_budgets 
+    WHERE entity_type = 'user' AND entity_id = NEW.user_id;
+    
+    IF NOT FOUND THEN
+        INSERT INTO ai_budgets (entity_type, entity_id)
+        VALUES ('user', NEW.user_id)
+        RETURNING * INTO budget_record;
+    END IF;
+    
+    -- Check if we need to reset daily/monthly usage
+    IF budget_record.daily_reset_at < CURRENT_DATE THEN
+        UPDATE ai_budgets 
+        SET daily_usage = 0, daily_reset_at = CURRENT_DATE
+        WHERE id = budget_record.id;
+        budget_record.daily_usage := 0;
+    END IF;
+    
+    IF budget_record.monthly_reset_at < DATE_TRUNC('month', CURRENT_DATE)::DATE THEN
+        UPDATE ai_budgets 
+        SET monthly_usage = 0, monthly_reset_at = DATE_TRUNC('month', CURRENT_DATE)::DATE
+        WHERE id = budget_record.id;
+        budget_record.monthly_usage := 0;
+    END IF;
+    
+    -- Update usage
+    UPDATE ai_budgets 
+    SET daily_usage = daily_usage + NEW.cost,
+        monthly_usage = monthly_usage + NEW.cost
+    WHERE id = budget_record.id;
+    
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER track_ai_budget_trigger
+AFTER INSERT ON ai_usage_logs
+FOR EACH ROW 
+WHEN (NEW.cost IS NOT NULL AND NEW.cost > 0)
+EXECUTE FUNCTION track_ai_budget();
+
 -- =====================================================
--- INITIAL SEED DATA
+-- INITIAL DATA
 -- =====================================================
 
--- Insert default permissions
-INSERT INTO permissions (resource, action, description) VALUES
--- System permissions
-('system', 'manage', 'Full system administration'),
-('system', 'view_analytics', 'View system-wide analytics'),
-('system', 'manage_users', 'Manage all users'),
-('system', 'manage_security', 'Manage security settings'),
--- User permissions
-('users', 'create', 'Create new users'),
-('users', 'read', 'View user profiles'),
-('users', 'update', 'Update user information'),
-('users', 'delete', 'Delete users'),
-('users', 'manage_roles', 'Assign user roles'),
--- Course permissions
-('courses', 'create', 'Create courses'),
-('courses', 'read', 'View courses'),
-('courses', 'update', 'Update course information'),
-('courses', 'delete', 'Delete courses'),
-('courses', 'manage_sections', 'Manage course sections'),
--- Assignment permissions
-('assignments', 'create', 'Create assignments'),
-('assignments', 'read', 'View assignments'),
-('assignments', 'update', 'Update assignments'),
-('assignments', 'delete', 'Delete assignments'),
-('assignments', 'grade', 'Grade assignments'),
--- AI tools permissions
-('ai_tools', 'use', 'Use AI tools'),
-('ai_tools', 'manage', 'Manage AI tools'),
-('ai_tools', 'view_usage', 'View AI usage statistics'),
--- Analytics permissions
-('analytics', 'view_own', 'View own analytics'),
-('analytics', 'view_department', 'View department analytics'),
-('analytics', 'view_institution', 'View institution analytics');
+-- Default institution
+INSERT INTO institutions (id, name, short_name, type, email_domain, timezone, ai_budget_daily, ai_budget_monthly)
+VALUES (
+    'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid,
+    'Academic AI Demo University',
+    'AADU',
+    'university',
+    'aadu.edu',
+    'America/New_York',
+    5.00,
+    150.00
+);
 
--- Insert default AI tools
-INSERT INTO ai_tools (name, display_name, category, subcategory, description, roles_allowed, input_schema) VALUES
+-- System prompt templates
+INSERT INTO prompt_templates (name, category, template_content, variables, visibility)
+VALUES 
+(
+    'lesson_plan_system',
+    'system',
+    'You are an expert educational curriculum designer. Create comprehensive, engaging lesson plans that align with learning objectives and standards. Include differentiation strategies and assessment methods.',
+    '[]'::jsonb,
+    'public'
+),
+(
+    'ai_tutor_system',
+    'system',
+    'You are a patient, encouraging tutor. Help students understand concepts through clear explanations, examples, and guided practice. Never give direct answers; instead, lead students to discover solutions themselves.',
+    '[]'::jsonb,
+    'public'
+),
+(
+    'grading_feedback_system',
+    'system',
+    'You are a constructive and supportive instructor providing feedback on student work. Focus on strengths, areas for improvement, and specific suggestions. Be encouraging while maintaining academic standards.',
+    '[]'::jsonb,
+    'public'
+);
+
+-- Default AI tools
+INSERT INTO ai_tools (name, display_name, description, category, allowed_roles)
+VALUES
 -- Student tools
-('ai_tutor', 'AI Tutor', 'learning', 'tutoring', '24/7 homework help with step-by-step explanations', '{student}', '{"question": "string"}'),
-('study_guide_generator', 'Study Guide Generator', 'learning', 'study', 'Create personalized study materials from course content', '{student}', '{"topic": "string", "course_id": "uuid"}'),
-('practice_test_creator', 'Practice Test Creator', 'learning', 'assessment', 'Generate self-assessment quizzes and practice exams', '{student}', '{"subject": "string", "difficulty": "string"}'),
-('concept_explainer', 'Concept Explainer', 'learning', 'tutoring', 'Break down complex topics into simple terms', '{student}', '{"concept": "string"}'),
-('math_solver', 'Math Problem Solver', 'learning', 'math', 'Step-by-step mathematical problem solving', '{student}', '{"problem": "string"}'),
-('writing_coach', 'Writing Coach', 'writing', 'coaching', 'Essay structure, grammar, and style improvement', '{student}', '{"text": "string", "type": "string"}'),
-('research_assistant', 'Research Assistant', 'writing', 'research', 'Source finding, citation help, and fact-checking', '{student}', '{"topic": "string"}'),
+('ai_tutor', 'AI Tutor', '24/7 personalized tutoring assistance', 'learning', ARRAY['student']::user_role[]),
+('study_guide_generator', 'Study Guide Generator', 'Create custom study materials', 'learning', ARRAY['student']::user_role[]),
+('essay_assistant', 'Essay Writing Assistant', 'Help with essay structure and improvement', 'learning', ARRAY['student']::user_role[]),
+('math_solver', 'Math Problem Solver', 'Step-by-step math problem solutions', 'learning', ARRAY['student']::user_role[]),
+
 -- Faculty tools
-('lesson_plan_generator', 'Lesson Plan Generator', 'teaching', 'planning', 'Create standards-aligned lesson plans', '{faculty}', '{"subject": "string", "grade_level": "string", "duration": "integer"}'),
-('assessment_designer', 'Assessment Designer', 'teaching', 'assessment', 'Create quizzes and tests with rubrics', '{faculty}', '{"topic": "string", "question_count": "integer"}'),
-('rubric_generator', 'Rubric Generator', 'teaching', 'assessment', 'Design comprehensive grading rubrics', '{faculty}', '{"assignment_type": "string", "criteria": "array"}'),
-('feedback_assistant', 'Feedback Assistant', 'teaching', 'grading', 'Generate personalized student feedback', '{faculty}', '{"submission": "string", "rubric": "object"}'),
-('differentiation_planner', 'Differentiation Planner', 'teaching', 'planning', 'Create multi-tiered instruction strategies', '{faculty}', '{"lesson": "string", "student_needs": "array"}'),
--- Staff tools
-('document_generator', 'Document Generator', 'administrative', 'documents', 'Create official letters and reports', '{staff,admin}', '{"template": "string", "data": "object"}'),
-('scheduling_coordinator', 'Scheduling Coordinator', 'administrative', 'scheduling', 'Manage meetings and calendars', '{staff,admin}', '{"event_type": "string", "participants": "array"}'),
-('report_compiler', 'Report Compiler', 'administrative', 'reporting', 'Automated data collection and formatting', '{staff,admin}', '{"report_type": "string", "date_range": "object"}');
+('lesson_planner', 'Lesson Plan Generator', 'Create standards-aligned lesson plans', 'teaching', ARRAY['faculty']::user_role[]),
+('quiz_creator', 'Quiz & Test Creator', 'Generate assessments with answer keys', 'assessment', ARRAY['faculty']::user_role[]),
+('rubric_builder', 'Rubric Builder', 'Design detailed grading rubrics', 'assessment', ARRAY['faculty']::user_role[]),
+('feedback_generator', 'Feedback Assistant', 'Generate personalized student feedback', 'assessment', ARRAY['faculty']::user_role[]),
 
--- Insert default feature flags
-INSERT INTO feature_flags (name, description, is_enabled) VALUES
-('ai_tools_enabled', 'Enable AI tools across the platform', true),
-('google_workspace_integration', 'Enable Google Workspace integration', true),
-('parent_portal', 'Enable parent/guardian access portal', true),
-('mobile_app', 'Enable mobile application features', false),
-('advanced_analytics', 'Enable advanced analytics dashboards', true),
-('workflow_automation', 'Enable workflow automation engine', true),
-('peer_review', 'Enable peer review for assignments', false),
-('gamification', 'Enable gamification features', false);
+-- Administrative tools
+('report_generator', 'Report Generator', 'Create administrative reports', 'administrative', ARRAY['admin', 'staff']::user_role[]),
+('email_composer', 'Email Composer', 'Draft professional communications', 'communication', ARRAY['admin', 'staff', 'faculty']::user_role[]),
+('schedule_optimizer', 'Schedule Optimizer', 'Optimize class and resource scheduling', 'administrative', ARRAY['admin']::user_role[]),
+('data_analyzer', 'Data Analyzer', 'Analyze institutional data and trends', 'analytics', ARRAY['admin', 'superadmin']::user_role[]);
 
--- Insert default system configuration
-INSERT INTO system_config (key, value, category, description) VALUES
-('ai_daily_budget', '5.00', 'ai', 'Daily AI usage budget in USD'),
-('ai_monthly_budget', '150.00', 'ai', 'Monthly AI usage budget in USD'),
-('session_timeout', '3600', 'security', 'Session timeout in seconds'),
-('password_min_length', '8', 'security', 'Minimum password length'),
-('max_login_attempts', '5', 'security', 'Maximum failed login attempts before lockout'),
-('file_upload_max_size', '52428800', 'system', 'Maximum file upload size in bytes (50MB)'),
-('email_from_address', 'noreply@academic-ai.edu', 'email', 'System email from address'),
-('timezone', 'America/New_York', 'system', 'Default system timezone'),
-('academic_year_start', '08-01', 'academic', 'Academic year start date (MM-DD)'),
-('grade_scale', '{"A": 90, "B": 80, "C": 70, "D": 60, "F": 0}', 'academic', 'Default grading scale');
+-- Default agent prompts
+INSERT INTO agent_prompts (agent_name, system_prompt, preferred_model, temperature)
+VALUES
+(
+    'academic_assistant',
+    'You are an intelligent academic assistant for an educational institution. Help users with their academic queries, provide guidance, and use available tools when appropriate. Always maintain a professional, supportive tone.',
+    'gpt-4',
+    0.7
+),
+(
+    'admin_assistant',
+    'You are an administrative assistant for educational institution management. Help with scheduling, reporting, data analysis, and institutional operations. Be precise and efficiency-focused.',
+    'gpt-4',
+    0.3
+);
 
--- =====================================================
 -- COMMENTS FOR DOCUMENTATION
--- =====================================================
+COMMENT ON TABLE users IS 'Core user table with native authentication support';
+COMMENT ON TABLE prompt_templates IS 'Library of reusable prompt templates for AI interactions';
+COMMENT ON TABLE conversations IS 'LangChain-compatible conversation storage';
+COMMENT ON TABLE google_workspace_connections IS 'OAuth connections for Google Workspace services';
+COMMENT ON TABLE ai_agents IS 'Complex AI agents that can use multiple tools';
+COMMENT ON TABLE ai_usage_logs IS 'Comprehensive tracking of all AI tool and agent usage';
+COMMENT ON TABLE workflow_templates IS 'Automation templates for common academic workflows';
 
-COMMENT ON TABLE users IS 'Core user table for authentication and profiles';
-COMMENT ON TABLE ai_tools IS 'Registry of all AI tools available in the platform';
-COMMENT ON TABLE ai_tool_usage IS 'Tracks usage of AI tools for cost monitoring and analytics';
-COMMENT ON TABLE courses IS 'Course catalog with descriptions and requirements';
-COMMENT ON TABLE enrollments IS 'Student enrollment in course sections';
-COMMENT ON TABLE assignments IS 'Assignments, quizzes, and assessments';
-COMMENT ON TABLE audit_logs IS 'FERPA-compliant audit trail of all data access';
-COMMENT ON TABLE feature_flags IS 'Feature toggles for gradual rollout and A/B testing';
-
--- End of schema
+-- Grant necessary permissions (adjust based on your database users)
+-- GRANT USAGE ON SCHEMA public TO web_user;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO web_user;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO web_user;
