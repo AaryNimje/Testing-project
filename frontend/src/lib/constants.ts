@@ -1,12 +1,11 @@
-// lib/constants.ts
-import { ReactNode, ComponentType, ReactElement } from 'react';
+import { ComponentType, ReactElement } from 'react';  // Remove ReactNode
 
 export type UserRole = 'super_admin' | 'admin' | 'faculty' | 'student' | 'staff';
 
 export interface DashboardMenuItem {
   name: string;
   path?: string;
-  icon: ComponentType<any> | (() => ReactElement);
+  icon: ComponentType<Record<string, never>> | (() => ReactElement);  // Replace any with Record<string, never>
   badge?: string;
 }
 

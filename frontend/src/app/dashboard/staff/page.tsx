@@ -6,7 +6,6 @@ import {
   IconBrain,
   IconChartBar,
   IconCalendarEvent,
-  IconClipboard,
   IconBuildingCommunity,
   IconDeviceLaptop,
   IconBook,

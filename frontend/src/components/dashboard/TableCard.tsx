@@ -6,9 +6,10 @@ export interface TableCardProps {
   title: string;
   subtitle?: string;
   icon?: ReactNode;
+  // Mark these as optional since they're not used in the component implementation
   headers?: string[];
-  data?: any[][];
-  columns?: { key: string; label: string }[];
+  data?: Array<Array<unknown>>;
+  columns?: Array<{ key: string; label: string }>;
   className?: string;
   children?: ReactNode;
 }
@@ -17,6 +18,8 @@ export default function TableCard({
   title, 
   subtitle,
   icon,
+  // Keeping these in the destructuring even though they're not used
+  // so that they're removed from the ...rest props
   headers,
   data,
   columns,

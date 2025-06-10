@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -61,78 +60,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } else {
-          setState(prev => ({ ...prev, loading: false }));
+          setState({
+            ...state,
+            loading: false,
+          });
         }
       } catch (error) {
         setState({
-          isAuthenticated: false,
-          user: null,
-          token: null,
+          ...state,
           loading: false,
-          error: 'Authentication check failed',
+          error: null,
         });
       }
     };
     
     checkAuth();
-  }, []);
+  }, );
   
   // Login function
   const login = async (credentials: LoginCredentials) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState({
+      ...state,
+      loading: true,
+      error: null,
+    });
     
     try {
-      const { token, user } = await authApi.login(credentials.email, credentials.password);
+      const response = await authApi.login(credentials.email, credentials.password);
       
-      // Store token in localStorage
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', user.role);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('userRole', response.user.role);
       
       setState({
         isAuthenticated: true,
-        user,
-        token,
+        user: response.user,
+        token: response.token,
         loading: false,
         error: null,
       });
       
-      // Redirect based on user role
-      redirectToDashboard(user.role);
-    } catch (error: any) {
-      setState(prev => ({
-        ...prev,
+      router.push('/dashboard');
+    } catch (error) {
+      const errorMessage = (error as Error).message || 'Login failed';
+      
+      setState({
+        ...state,
         loading: false,
-        error: error.message || 'Login failed',
-      }));
+        error: errorMessage,
+      });
+      
+      throw new Error(errorMessage);
     }
   };
   
   // Signup function
   const signup = async (data: SignupData) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState({
+      ...state,
+      loading: true,
+      error: null,
+    });
     
     try {
       await authApi.signup(data);
       
-      setState(prev => ({
-        ...prev,
+      setState({
+        ...state,
         loading: false,
-      }));
+      });
       
-      // Redirect to login page
-      router.push('/auth');
-    } catch (error: any) {
-      setState(prev => ({
-        ...prev,
+      router.push('/login?registered=true');
+    } catch (error) {
+      const errorMessage = (error as Error).message || 'Signup failed';
+      
+      setState({
+        ...state,
         loading: false,
-        error: error.message || 'Signup failed',
-      }));
+        error: errorMessage,
+      });
+      
+      throw new Error(errorMessage);
     }
   };
   
   // Logout function
   const logout = () => {
-    // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
     
@@ -144,56 +156,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       error: null,
     });
     
-    // Redirect to login page
-    router.push('/auth');
+    router.push('/login');
   };
   
-  // Clear error
+  // Clear error function
   const clearError = () => {
-    setState(prev => ({ ...prev, error: null }));
+    setState({
+      ...state,
+      error: null,
+    });
   };
   
-  // Helper function to redirect based on role
-  const redirectToDashboard = (role: string) => {
-    switch (role) {
-      case 'super_admin':
-        router.push('/dashboard/superadmin');
-        break;
-      case 'admin':
-        router.push('/dashboard/admin');
-        break;
-      case 'faculty':
-        router.push('/dashboard/faculty');
-        break;
-      case 'student':
-        router.push('/dashboard/student');
-        break;
-      case 'staff':
-        router.push('/dashboard/staff');
-        break;
-      default:
-        router.push('/dashboard');
-        break;
-    }
-  };
-  
-  // Context value
-  const value: AuthContextType = {
-    ...state,
-    login,
-    signup,
-    logout,
-    clearError,
-  };
-  
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{
+      ...state,
+      login,
+      signup,
+      logout,
+      clearError,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 // Custom hook to use auth context
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
+  
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+  
   return context;
-}
+};

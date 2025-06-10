@@ -39,7 +39,7 @@ export default function FacultyDashboard() {
 
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Faculty Dashboard</h1>
-        <p className="text-gray-300">Welcome back! Here's your teaching overview.</p>
+        <p className="text-gray-300">Welcome back! Heres your teaching overview.</p>
       </div>
 
       <BentoGrid className="max-w-full">
@@ -67,7 +67,7 @@ const Skeleton = ({ className }: { className?: string }) => (
 const ClassSchedule = () => (
   <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4 overflow-hidden">
     <div className="w-full">
-      <h3 className="text-sm font-medium text-gray-300 mb-2">Today's Classes</h3>
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Todays Classes</h3>
       <div className="space-y-3 overflow-y-auto max-h-[calc(100%-2rem)]">
         {[
           { time: "09:00 AM", course: "Physics 101", location: "Science Hall 305", students: 28 },

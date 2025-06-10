@@ -51,7 +51,7 @@ export default function ContactPage() {
           </h1>
           
           <p className="text-xl text-gray-200 text-center mb-8 max-w-md mx-auto">
-            Have questions about our platform? We're here to help you transform your educational experience.
+            Have questions about our platform? Were here to help you transform your educational experience.
           </p>
           
           {/* Contact Form */}

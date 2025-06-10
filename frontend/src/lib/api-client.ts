@@ -1,4 +1,3 @@
-// src/lib/api-client.ts
 import { UserRole } from '@/lib/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -21,6 +20,20 @@ export interface AuthResponse {
 export interface ApiError {
   message: string;
   status: number;
+}
+
+export interface DashboardStats {
+  userCount: number;
+  newToday: number;
+  systemUptime: number;
+  dailyCost: number;
+  dailyCap: number;
+  apiHealth: number;
+  recentActivity: Array<{
+    user: string;
+    action: string;
+    timestamp: string;
+  }>;
 }
 
 // Helper method to handle API responses
@@ -117,7 +130,7 @@ export const authApi = {
 // Dashboard API client
 export const dashboardApi = {
   // Get dashboard statistics
-  getStats: async (token: string): Promise<any> => {
+  getStats: async (token: string): Promise<DashboardStats> => {
     const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
       method: 'GET',
       headers: {
@@ -126,6 +139,6 @@ export const dashboardApi = {
       }
     });
     
-    return handleResponse<any>(response);
+    return handleResponse<DashboardStats>(response);
   }
 };

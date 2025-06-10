@@ -17,7 +17,7 @@ import { BentoGrid, BentoGridItem } from "../../../components/ui/bento-grid";
 
 export default function StudentDashboard() {
   // Simulated user data - replace with actual auth
-  const [user, setUser] = useState({
+  const [user] = useState({
     name: "Alex Johnson",
     role: "student"
   });
@@ -37,7 +37,7 @@ export default function StudentDashboard() {
 
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Student Dashboard</h1>
-        <p className="text-gray-300">Welcome back! Here's your academic overview.</p>
+        <p className="text-gray-300">Welcome back! Heres your academic overview.</p>
       </div>
 
       <BentoGrid className="max-w-full">
@@ -125,7 +125,7 @@ const UpcomingAssignments = () => (
 const Schedule = () => (
   <div className="flex flex-1 w-full h-full min-h-[8rem] rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-4 overflow-hidden">
     <div className="w-full">
-      <h3 className="text-sm font-medium text-gray-300 mb-2">Today's Schedule</h3>
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Todays Schedule</h3>
       <div className="space-y-3 overflow-y-auto max-h-[calc(100%-2rem)]">
         {[
           { time: "09:00 AM", course: "Physics 101", location: "Science Hall 305" },

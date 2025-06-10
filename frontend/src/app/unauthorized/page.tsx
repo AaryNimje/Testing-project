@@ -28,7 +28,7 @@ export default function UnauthorizedPage() {
         
         <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
         <p className="text-gray-400 mb-6">
-          You don't have permission to access this page. This area requires higher privileges than your current role.
+          You dont have permission to access this page. This area requires higher privileges than your current role.
         </p>
         
         {isAuthenticated && user ? (

@@ -1,4 +1,3 @@
-// components/dashboard/ChartCard.tsx
 'use client';
 
 import React, { ReactNode } from 'react';
@@ -6,15 +5,15 @@ import React, { ReactNode } from 'react';
 export interface ChartCardProps {
   title: string;
   subtitle?: string;
-  value?: string | number;
   icon?: ReactNode;
+  statInfo?: { value: number; label: string } | string;
   chartType?: string;
-  data?: any[];
+  data?: Array<Record<string, unknown>>;
   dataKey?: string;
   xAxisKey?: string;
   chart?: {
     type: string;
-    data: any[];
+    data: Array<Record<string, unknown>>;
     dataKeys?: string[];
     dataKey?: string;
     colors?: string[];
@@ -26,8 +25,9 @@ export interface ChartCardProps {
 export default function ChartCard({ 
   title, 
   subtitle,
-  value,
   icon,
+  // Keep these in the destructuring even though they're not used
+  // so that they're removed from the ...rest props
   chartType,
   data,
   dataKey,
@@ -42,7 +42,6 @@ export default function ChartCard({
         <div>
           <h3 className="font-semibold text-gray-900">{title}</h3>
           {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
-          {value && <div className="text-2xl font-bold">{value}</div>}
         </div>
         {icon && <div>{icon}</div>}
       </div>

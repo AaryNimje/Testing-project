@@ -8,12 +8,12 @@ export interface ChartCardProps {
   icon?: ReactNode;
   statInfo?: { value: number; label: string } | string;
   chartType?: string;
-  data?: any[];
+  data?: Array<Record<string, unknown>>;
   dataKey?: string;
   xAxisKey?: string;
   chart?: {
     type: string;
-    data: any[];
+    data: Array<Record<string, unknown>>;
     dataKeys?: string[];
     dataKey?: string;
     colors?: string[];
@@ -26,6 +26,8 @@ export default function ChartCard({
   title, 
   subtitle,
   icon,
+  // Keep these in the destructuring even though they're not used
+  // so that they're removed from the ...rest props
   chartType,
   data,
   dataKey,
